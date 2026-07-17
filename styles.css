@@ -24,5 +24,6 @@
 #greetingName{color:inherit!important;font-size:inherit!important}
 .time-slot{height:69px;padding:8px 12px}
 .cal-event time{display:block;font-size:9px;font-weight:700;line-height:1.1;opacity:.8;margin-bottom:2px}
+.cal-event small{display:block;margin-top:2px;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.2px;opacity:.75}
 .month-event{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .month-event time{font-weight:700;margin-right:4px}
