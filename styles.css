@@ -27,3 +27,10 @@
 .cal-event small{display:block;margin-top:2px;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.2px;opacity:.75}
 .month-event{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .month-event time{font-weight:700;margin-right:4px}
+
+/* Appointment editor: make Save and Delete equal, deliberate actions. */
+#deleteAppointment{display:none}
+#modal[data-type="edit-appointment-v2"] #modalForm{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+#modal[data-type="edit-appointment-v2"] #modalFields{grid-column:1/-1}
+#modal[data-type="edit-appointment-v2"] #modalForm>button[type="submit"],#modal[data-type="edit-appointment-v2"] #deleteAppointment{display:block;width:100%;margin:0;min-height:54px}
+#modal[data-type="edit-appointment-v2"] #deleteAppointment{background:#d9574c;color:#fff;box-shadow:0 5px 12px #d9574c2b}

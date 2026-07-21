@@ -258,12 +258,18 @@ var deleteEnabledAppointmentEditor=openAppointmentEditor;
 openAppointmentEditor=function(id){
  deleteEnabledAppointmentEditor(id);
  let a=appointments.find(x=>x.id===id);
- if(!a||$('#deleteAppointment'))return;
- let cancel=$('#cancelAppointment'),deleteButton=document.createElement('button');
- deleteButton.type='button';
- deleteButton.className='danger-btn modal-delete';
- deleteButton.id='deleteAppointment';
- deleteButton.textContent='Delete appointment';
+ if(!a)return;
+ let cancel=$('#cancelAppointment'),deleteButton=$('#deleteAppointment');
+ if(!deleteButton){
+  deleteButton=document.createElement('button');
+  deleteButton.type='button';
+  deleteButton.className='danger-btn modal-delete';
+  deleteButton.id='deleteAppointment';
+  deleteButton.textContent='Delete appointment';
+  $('#modalForm').appendChild(deleteButton);
+ }
+ let note=$('#modalFields .form-note');
+ if(note)note.textContent='Change appointment information and update its status.';
  deleteButton.onclick=()=>{
   if(!confirm(`Permanently delete ${a.id} for ${a.patient}?`))return;
   appointments=appointments.filter(x=>x.id!==id);
@@ -274,7 +280,7 @@ openAppointmentEditor=function(id){
   $('#modal').classList.add('hidden');
   toast(`${a.id} deleted`);
  };
- if(cancel)cancel.insertAdjacentElement('afterend',deleteButton);else $('#modalFields').appendChild(deleteButton);
+ if(cancel)cancel.remove();
 };let previousAppointmentPage=page;page=function(id){previousAppointmentPage(id);if(id==='appointments'){normalizeAppointments();renderAppointmentList();renderCalendar()}}
 normalizeAppointments();
 saveAppointments();
