@@ -1,0 +1,489 @@
+/* ==========================================================================
+   Sync2EHR · Glass v2 theme layer
+   --------------------------------------------------------------------------
+   Load AFTER styles.css:  <link rel="stylesheet" href="glass-v2.css" />
+   Roll back by deleting that one line. No markup, text or JS changes.
+
+   Concept: frosted clinic glass over chart paper. A faint ECG-style grid and
+   soft "sea-glass" daylight sit behind every pane, so the frost is visible
+   (the grid blurs away under each panel) while text stays on near-opaque
+   glass for readability.
+   ========================================================================== */
+
+:root{
+  /* palette */
+  --g-ink:#0f2a2e;          /* primary text */
+  --g-ink-2:#33494f;        /* secondary text */
+  --g-muted:#4b6268;        /* captions, helper text */
+  --g-faint:#566d73;        /* table headers, time labels */
+  --g-sea:#097468;          /* brand teal for text and accents (AA on the lightest pane) */
+  --g-sea-deep:#086358;     /* teal text on tinted surfaces */
+  --g-lagoon:#8fd3c8;       /* light accent on dark glass */
+  --g-daylight:#d99a3e;     /* training-mode / warm accent */
+
+  /* glass surfaces */
+  --g-pane-strong:rgba(255,255,255,.80);
+  --g-pane-soft:rgba(255,255,255,.46);
+  --g-edge:rgba(255,255,255,.72);
+  --g-hair:rgba(15,42,46,.09);
+  --g-row:rgba(15,42,46,.07);
+  --g-hover:rgba(11,127,115,.07);
+  --g-blur:blur(22px) saturate(170%);
+  --g-blur-lite:blur(12px) saturate(150%);
+  --g-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 0 0 1px rgba(15,42,46,.05),0 10px 30px -14px rgba(13,59,57,.28),0 2px 6px -2px rgba(13,59,57,.08);
+  --g-shadow-lift:inset 0 1px 0 rgba(255,255,255,.95),0 0 0 1px rgba(15,42,46,.07),0 20px 44px -18px rgba(13,59,57,.38),0 3px 8px -3px rgba(13,59,57,.10);
+
+  /* radius hierarchy: shell > pane > tile > control */
+  --g-r-shell:24px;
+  --g-r-pane:18px;
+  --g-r-tile:12px;
+  --g-r-ctl:10px;
+
+  /* re-point the original tokens so untouched rules pick up the new tones */
+  --ink:#0f2a2e;
+  --muted:#4b6268;
+  --line:rgba(15,42,46,.10);
+  --teal:#097468;
+
+  /* icons (stroke icons drawn for this theme, used as CSS masks) */
+  --i-dashboard:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='3.5' width='7' height='7' rx='2'/%3E%3Crect x='13.5' y='3.5' width='7' height='7' rx='2'/%3E%3Crect x='3.5' y='13.5' width='7' height='7' rx='2'/%3E%3Crect x='13.5' y='13.5' width='7' height='7' rx='2'/%3E%3C/svg%3E");
+  --i-patients:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5'/%3E%3Cpath d='M15.5 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c1.9.7 3.1 2.4 3.5 5.2'/%3E%3C/svg%3E");
+  --i-calendar:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4M8 14h2M12 14h2M8 17.5h2'/%3E%3C/svg%3E");
+  --i-record:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3.5H7A2.5 2.5 0 0 0 4.5 6v12A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5V9z'/%3E%3Cpath d='M14 3.5V9h5.5M8.5 13h7M8.5 16.5h5'/%3E%3C/svg%3E");
+  --i-pill:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2.5' y='8.5' width='19' height='7' rx='3.5' transform='rotate(-45 12 12)'/%3E%3Cpath d='M9.5 9.5l5 5'/%3E%3C/svg%3E");
+  --i-card:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2.5' y='5.5' width='19' height='13' rx='2.5'/%3E%3Cpath d='M2.5 10h19M6.5 14.5h4'/%3E%3C/svg%3E");
+  --i-chart:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h16'/%3E%3Crect x='5.5' y='11' width='3' height='6' rx='1'/%3E%3Crect x='10.5' y='5.5' width='3' height='11.5' rx='1'/%3E%3Crect x='15.5' y='13' width='3' height='4' rx='1'/%3E%3C/svg%3E");
+  --i-shield:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7.5 3v5.5c0 4.6-3.2 8-7.5 9.5-4.3-1.5-7.5-4.9-7.5-9.5V6z'/%3E%3Ccircle cx='12' cy='10.5' r='2.3'/%3E%3Cpath d='M8.4 16.3c.9-1.6 2.1-2.4 3.6-2.4s2.7.8 3.6 2.4'/%3E%3C/svg%3E");
+  --i-user:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Ccircle cx='12' cy='10' r='3'/%3E%3Cpath d='M6.6 18.2c1.3-2 3.1-3 5.4-3s4.1 1 5.4 3'/%3E%3C/svg%3E");
+  --i-help:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01'/%3E%3C/svg%3E");
+  --i-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='M20 20l-4.2-4.2'/%3E%3C/svg%3E");
+  --i-bell:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z'/%3E%3Cpath d='M10 21a2 2 0 0 0 4 0'/%3E%3C/svg%3E");
+  --i-tasks:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='3.5' width='16' height='17' rx='3'/%3E%3Cpath d='M8 9l1.5 1.5L12 8M8 15l1.5 1.5L12 14M14.5 9.5h2M14.5 15.5h2'/%3E%3C/svg%3E");
+}
+
+/* ---------- canvas: daylight pools + chart-paper grid ---------- */
+html{background:#e8f1ef}
+body{background:transparent;color:var(--g-ink);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(42vmax 36vmax at 4% 2%,rgba(117,207,190,.55),transparent 62%),
+    radial-gradient(38vmax 34vmax at 98% 6%,rgba(158,207,233,.48),transparent 64%),
+    radial-gradient(40vmax 34vmax at 90% 98%,rgba(242,194,123,.28),transparent 62%),
+    radial-gradient(36vmax 30vmax at 16% 96%,rgba(143,211,200,.38),transparent 64%),
+    linear-gradient(180deg,#eef6f4,#e5efed);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(11,127,115,.075) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(11,127,115,.075) 1px,transparent 1px),
+    linear-gradient(rgba(11,127,115,.032) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(11,127,115,.032) 1px,transparent 1px);
+  background-size:40px 40px,40px 40px,8px 8px,8px 8px;
+  -webkit-mask-image:radial-gradient(130% 95% at 55% 35%,#000 35%,transparent 90%);
+          mask-image:radial-gradient(130% 95% at 55% 35%,#000 35%,transparent 90%);
+}
+::selection{background:rgba(11,127,115,.20)}
+*{scrollbar-width:thin;scrollbar-color:rgba(15,42,46,.22) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(15,42,46,.18);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- keyboard focus (was missing on most buttons) ---------- */
+:where(button,a,[tabindex]):focus-visible{outline:2px solid var(--g-sea);outline-offset:2px;border-radius:10px}
+.sidebar :focus-visible{outline-color:var(--g-lagoon)}
+
+/* ---------- type ---------- */
+/* the original rules name Manrope with no fallback, so headings turned serif whenever Google Fonts was slow or blocked */
+.brand,.art-copy h1,.auth-form h2,.crumb span,.welcome h1,.page-intro h1,.stat-grid strong,.card-head h3,.card h3,.calendar-head b,
+.profile-avatar,.modal-box h2,.training-banner strong,.student-report-card button b,.billing-summary b,.access-stat-grid strong,
+.report-modal h3,.pdf-preview span{font-family:Manrope,"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+.welcome h1,.page-intro h1{font-weight:800;letter-spacing:-.035em;color:var(--g-ink)}
+.welcome h1 span{color:var(--g-daylight)}
+.eyebrow{letter-spacing:.14em}
+.teal,.eyebrow.teal{color:var(--g-sea)}
+.card-head h3,.card h3{letter-spacing:-.02em;color:var(--g-ink)}
+.stat-grid strong,.access-stat-grid strong,.billing-summary b,.student-report-card button b,.report-preview-item b,.appt time b{font-variant-numeric:tabular-nums}
+.positive{color:#0b6e53}
+.negative{color:#b03d2b}
+.muted{color:var(--g-faint)}
+.error{color:#b03d2b}
+.empty-state{color:var(--g-muted)}
+
+/* ---------- sign-in ---------- */
+.auth-art{
+  isolation:isolate;
+  background:
+    radial-gradient(60% 50% at 88% 86%,rgba(117,207,190,.30),transparent 70%),
+    radial-gradient(50% 40% at 8% 6%,rgba(126,170,225,.20),transparent 70%),
+    linear-gradient(165deg,#0f3e3c 0%,#0a2c2f 100%);
+}
+.auth-art .brand,.art-copy,.art-footer{position:relative;z-index:2}
+.art-copy h1{letter-spacing:-.045em}
+.art-copy p:not(.eyebrow){color:#c0d6d3}
+.art-orbits i{border-color:rgba(160,230,214,.15)}
+/* the one deliberate motion: an ECG trace drawn once behind the frosted tile */
+.auth-art::after{
+  content:"";position:absolute;left:0;right:0;bottom:145px;height:120px;z-index:-1;pointer-events:none;opacity:.6;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 120' preserveAspectRatio='none' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M0 70H90q10-12 20 0h30l6 10 10-64 12 84 8-30h34q16-20 32 0h158q10-12 20 0h30l6 10 10-64 12 84 8-30h34q16-20 32 0h48' stroke='%2391e0cf' stroke-opacity='.28' stroke-width='7' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M0 70H90q10-12 20 0h30l6 10 10-64 12 84 8-30h34q16-20 32 0h158q10-12 20 0h30l6 10 10-64 12 84 8-30h34q16-20 32 0h48' stroke='%23b4efe2' stroke-width='1.8' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center/100% 100% no-repeat;
+  -webkit-mask-image:linear-gradient(90deg,#000 0 45%,transparent 55% 100%);
+          mask-image:linear-gradient(90deg,#000 0 45%,transparent 55% 100%);
+  -webkit-mask-size:240% 100%;mask-size:240% 100%;
+  -webkit-mask-position:100% 0;mask-position:100% 0;
+  animation:g-trace 2.6s cubic-bezier(.4,0,.2,1) .35s forwards;
+}
+@keyframes g-trace{to{-webkit-mask-position:0 0;mask-position:0 0}}
+.pulse{
+  transform:none;bottom:157px;right:80px;width:76px;height:76px;border-radius:22px;
+  background:linear-gradient(145deg,rgba(255,255,255,.22),rgba(255,255,255,.06));
+  border:1px solid rgba(255,255,255,.30);
+  -webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%);
+  color:#e2fcf5;font-size:40px;font-weight:300;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 24px 40px -18px rgba(0,0,0,.55);
+}
+.brand>span>span{color:#8fdcca}
+.brand-mark{border-radius:9px;background:linear-gradient(145deg,#a8ead9,#5cc3ad);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 14px -6px rgba(92,195,173,.8)}
+.auth-panel{background:transparent;padding:32px 0}
+.auth-form{
+  width:min(440px,90%);padding:40px 38px 32px;border-radius:var(--g-r-shell);
+  background:linear-gradient(180deg,rgba(255,255,255,.84),rgba(255,255,255,.74));
+  border:1px solid var(--g-edge);box-shadow:var(--g-shadow-lift);
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);
+}
+.auth-form h2{letter-spacing:-.045em;color:var(--g-ink)}
+.check input{accent-color:var(--g-sea)}
+.invite-only-note{background:rgba(255,255,255,.55);border-color:rgba(15,42,46,.08);color:var(--g-muted)}
+
+/* ---------- form controls ---------- */
+.auth-form input:not([type=checkbox]),.profile-fields input,.modal-box input:not([type=checkbox]):not([type=radio]),.modal-box select,.modal-box textarea,
+.report-filters input,.report-filters select,.invite-student-card input{
+  background:rgba(255,255,255,.74);border:1px solid rgba(15,42,46,.14);border-radius:var(--g-r-ctl);color:var(--g-ink);
+  box-shadow:inset 0 1px 2px rgba(15,42,46,.05);transition:border-color .15s,box-shadow .15s,background-color .15s;
+}
+.auth-form input:focus,.profile-fields input:focus,.modal-box input:focus,.modal-box select:focus,.modal-box textarea:focus,
+.report-filters input:focus,.report-filters select:focus,.invite-student-card input:focus{
+  outline:none;background:#fff;border-color:rgba(11,127,115,.6);box-shadow:0 0 0 4px rgba(11,127,115,.14);
+}
+.auth-form label,.profile-fields label,.modal-box label,.report-filters label,.invite-student-card label{color:var(--g-ink-2)}
+.search{background:var(--g-pane-strong);border:1px solid rgba(15,42,46,.10);border-radius:12px;color:var(--g-muted);box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 6px 16px -10px rgba(13,59,57,.25)}
+.search input{background:transparent;color:var(--g-ink)}
+.search:focus-within{border-color:rgba(11,127,115,.5);box-shadow:0 0 0 4px rgba(11,127,115,.12)}
+.record-list .search{background:rgba(255,255,255,.55)}
+
+/* ---------- buttons ---------- */
+.primary{
+  border-radius:12px;color:#fff;
+  background:linear-gradient(180deg,#0c8073 0%,#0a7266 55%,#08655a 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.26),inset 0 -1px 0 rgba(0,0,0,.12),0 10px 22px -10px rgba(8,99,88,.7);
+  transition:transform .15s,box-shadow .15s,filter .15s;
+}
+.primary:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.primary:active{transform:none;filter:none}
+.secondary{border-radius:12px;background:rgba(11,127,115,.10);color:var(--g-sea-deep);border:1px solid rgba(11,127,115,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.6)}
+.secondary:hover{background:rgba(11,127,115,.16)}
+.filter{background:var(--g-pane-strong);border:1px solid rgba(15,42,46,.11);border-radius:var(--g-r-ctl);color:var(--g-ink-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.85)}
+.filter:hover{background:#fff}
+.danger-btn{background:rgba(214,74,58,.09);color:#a23426;border:1px solid rgba(214,74,58,.20);border-radius:var(--g-r-ctl)}
+.danger-btn:hover{background:rgba(214,74,58,.15)}
+.link-btn,.switcher button{color:var(--g-sea)}
+
+/* ---------- sidebar: floating dark sea-glass ---------- */
+.sidebar{
+  top:12px;left:12px;bottom:12px;width:244px;min-height:0;padding:22px 12px 14px;
+  border-radius:var(--g-r-shell);overflow-x:hidden;overflow-y:auto;scrollbar-width:none;
+  background:linear-gradient(180deg,rgba(13,64,62,.86),rgba(8,40,43,.90));
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 28px 56px -28px rgba(5,30,32,.6),0 2px 6px -2px rgba(5,30,32,.25);
+}
+.sidebar::-webkit-scrollbar{display:none}
+.clinic-switch{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;margin:30px 0 18px}
+.nav-item{position:relative;border-radius:11px;color:#bcd6d1;padding:10px 12px;transition:background-color .15s,color .15s}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active{
+  color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.08));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 8px 18px -10px rgba(0,0,0,.6);
+}
+.nav-item.active::before{content:"";position:absolute;left:-12px;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--g-lagoon);box-shadow:0 0 12px rgba(143,211,200,.8)}
+.nav-item>span{
+  font-size:0!important;width:20px;height:20px;flex:0 0 20px;opacity:.9;
+  background:currentColor;
+  -webkit-mask:var(--g-icon) center/20px 20px no-repeat;mask:var(--g-icon) center/20px 20px no-repeat;
+}
+.nav-item.active>span{color:var(--g-lagoon);opacity:1}
+.nav-item[data-page="dashboard"]{--g-icon:var(--i-dashboard)}
+.nav-item[data-page="patients"]{--g-icon:var(--i-patients)}
+.nav-item[data-page="appointments"]{--g-icon:var(--i-calendar)}
+.nav-item[data-page="medical"]{--g-icon:var(--i-record)}
+.nav-item[data-page="prescriptions"]{--g-icon:var(--i-pill)}
+.nav-item[data-page="billing"]{--g-icon:var(--i-card)}
+.nav-item[data-page="reports"]{--g-icon:var(--i-chart)}
+.nav-item[data-page="students"]{--g-icon:var(--i-shield)}
+.nav-item[data-page="profile"]{--g-icon:var(--i-user)}
+.side-bottom .nav-item:not([data-page]){--g-icon:var(--i-help)}
+.nav-item em{background:rgba(143,211,200,.20);color:#d2f6ee;border:1px solid rgba(143,211,200,.32);font-variant-numeric:tabular-nums}
+.side-bottom{border-top-color:rgba(255,255,255,.08)}
+
+/* ---------- content frame + floating top bar ---------- */
+.content{margin-left:256px;width:calc(100% - 256px);padding:0 16px}
+.topbar{
+  position:sticky;top:12px;z-index:3;max-width:1500px;height:64px;margin:12px auto 0;padding:0 12px 0 22px;
+  background:rgba(255,255,255,.58);border:1px solid var(--g-edge);border-radius:var(--g-r-pane);
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);box-shadow:var(--g-shadow);
+}
+.crumb span{letter-spacing:-.02em;color:var(--g-ink)}
+.crumb small{color:var(--g-faint)}
+.top-actions{gap:10px}
+.icon-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:0;color:var(--g-ink-2);background:rgba(255,255,255,.55);border:1px solid rgba(15,42,46,.08)}
+.icon-btn::before{content:"";width:18px;height:18px;background:currentColor;-webkit-mask:var(--g-icon) center/18px 18px no-repeat;mask:var(--g-icon) center/18px 18px no-repeat}
+.top-actions .icon-btn:first-child{--g-icon:var(--i-search)}
+.icon-btn.notification{--g-icon:var(--i-bell)}
+.notification i{right:9px;top:8px;width:7px;height:7px;box-shadow:0 0 0 2px #fff}
+.page{padding:28px 0 56px}
+
+/* ---------- glass panes ---------- */
+.card,.stat-grid article,.erx-table,.rx-workflow-card{
+  background:linear-gradient(180deg,rgba(255,255,255,.70),rgba(255,255,255,.58));
+  border:1px solid var(--g-edge);border-radius:var(--g-r-pane);box-shadow:var(--g-shadow);
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);
+}
+.stat-grid article{background:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.50))}
+.stat-grid strong{font-size:27px;color:var(--g-ink)}
+.stat-grid small,.access-stat-grid small{color:var(--g-muted)}
+.access-stat-grid strong{color:var(--g-ink)}
+.spark{display:none} /* decorative lines did not come from any data */
+.card.danger{border-color:rgba(214,74,58,.22);background:linear-gradient(180deg,rgba(255,244,241,.74),rgba(255,255,255,.58))}
+.clinical-note hr,.profile-card hr{border-top-color:var(--g-hair)}
+
+/* icon tiles */
+.stat-icon,.workflow-icon,.rx-icon{border-radius:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
+.stat-icon{font-size:0}
+.stat-icon::before{content:"";width:18px;height:18px;background:currentColor;-webkit-mask:var(--g-icon) center/18px 18px no-repeat;mask:var(--g-icon) center/18px 18px no-repeat}
+.stat-grid article:nth-child(1) .stat-icon{--g-icon:var(--i-patients)}
+.stat-grid article:nth-child(2) .stat-icon{--g-icon:var(--i-calendar)}
+.stat-grid article:nth-child(3) .stat-icon{--g-icon:var(--i-card)}
+.stat-grid article:nth-child(4) .stat-icon{--g-icon:var(--i-tasks)}
+.mint{background:rgba(86,188,169,.18);color:#0b6e5f}
+.blue{background:rgba(114,152,216,.18);color:#33589a}
+.amber{background:rgba(230,163,59,.20);color:#8d5a0a}
+.coral{background:rgba(239,130,107,.18);color:#a8422e}
+.rx-icon{background:rgba(11,127,115,.12);color:var(--g-sea-deep)}
+
+/* training notice: warm "daylight" tint so it reads as a simulation notice, not clinical UI */
+.training-banner{
+  background:linear-gradient(90deg,rgba(242,194,123,.26),rgba(255,255,255,.52) 65%);
+  border:1px solid rgba(214,145,40,.24);border-radius:14px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
+  -webkit-backdrop-filter:var(--g-blur-lite);backdrop-filter:var(--g-blur-lite);
+}
+.training-banner strong{color:#7f4f08}
+.training-banner span{color:#4d4430}
+
+/* ---------- lists, rows, headers ---------- */
+.table-row,.directory-row,.invoice,.billing-row,.erx-row,.appointment-row,.report-invoice,.task,.metric,.workflow-item,.rx,
+.access-user-row,.student-report-card button,.quick-reports button,.month-day,.cal-col,.weekdays span,.month-weekdays span,
+.calendar-head,.weekdays,.month-weekdays,.tabs,.erx-table h3,.erx-head,.billing-header,.directory-head,.access-list-card .card-head,
+.student-report-card .card-head,.workflow-queue{border-color:var(--g-row)}
+.billing-row,.erx-row,.appointment-row,.report-invoice,.rx-row,.invoice-row,.student-report-card button,.quick-reports button,.workflow-item{background:transparent}
+.billing-row:hover,.erx-row:hover,.appointment-row:hover,.report-invoice:hover,.rx-row:hover,.workflow-item:hover,.patient-detail:hover,
+.quick-reports button:hover{background:var(--g-hover)}
+.student-report-card button:hover{background:var(--g-hover);color:var(--g-sea-deep)}
+.table-header,.billing-header,.erx-head,.directory-head span{color:var(--g-faint)}
+.billing-header,.erx-head,.directory-head{background:rgba(255,255,255,.38)}
+.billing-row,.erx-row,.appointment-row,.report-invoice,.workflow-item{color:var(--g-ink-2)}
+.billing-row small,.appointment-row small,.report-invoice small,.directory-row .patient-name small,.record small,.rx small,.checkup{color:var(--g-muted)}
+.appt-date,.appointment-row>span:last-child,.report-invoice>span:last-child,.workflow-item>span:last-child{color:var(--g-sea-deep)}
+.student-report-card button b{color:var(--g-sea-deep)}
+.student-report-card .card-head>span{color:var(--g-sea-deep)}
+.more{color:var(--g-muted)}
+
+/* status pills: tinted glass with a hairline in the same hue */
+.pill,.claim-pill,.appt-tag,.protected-admin,.round-badge{border:1px solid transparent;font-variant-numeric:tabular-nums}
+.claim-pill,.pill.gray,.appointment-status.completed{background:rgba(15,42,46,.07);color:#3a4f54;border-color:rgba(15,42,46,.10)}
+.pill.green,.appointment-status.scheduled,.appointment-status.confirmed,.claim-pill.paid,.protected-admin{background:rgba(22,150,112,.12);color:#0a6449;border-color:rgba(22,150,112,.22)}
+.pill.amber,.appointment-status.rescheduled,.claim-pill.pending,.claim-pill.submitted,.claim-pill.resubmitted{background:rgba(214,145,40,.15);color:#7f4f08;border-color:rgba(214,145,40,.26)}
+.appointment-status.cancelled,.appointment-status.no-show,.claim-pill.denied{background:rgba(214,74,58,.10);color:#9d3325;border-color:rgba(214,74,58,.22)}
+.appointment-status.checked-in{background:rgba(83,127,192,.12);color:#2c5089;border-color:rgba(83,127,192,.24)}
+.appt-tag,.round-badge{background:rgba(11,127,115,.10);color:var(--g-sea-deep);border-color:rgba(11,127,115,.16);border-radius:999px}
+.appt-tag{padding:4px 9px}
+
+/* dashboard */
+.appt{grid-template-columns:64px 12px 1fr auto} /* times like "11:00 AM" no longer wrap */
+.timeline:before{left:77px;border-left-color:rgba(15,42,46,.12)}
+.appt time{color:var(--g-faint)}
+.appt time b{color:var(--g-ink)}
+.task button{background:rgba(11,127,115,.10);color:var(--g-sea-deep);border-radius:8px}
+.view-all{color:var(--g-sea-deep)}
+
+/* calendar */
+.calendar-head button{color:var(--g-ink-2)}
+.calendar-head .today{background:var(--g-pane-strong);border:1px solid rgba(15,42,46,.12);border-radius:var(--g-r-ctl);color:var(--g-ink-2)}
+.view-toggle{background:rgba(15,42,46,.06);border-radius:11px;padding:3px}
+.view-toggle .calendar-view{color:var(--g-muted);border-radius:8px}
+.view-toggle .calendar-view.active{background:rgba(255,255,255,.94);color:var(--g-sea-deep);box-shadow:inset 0 1px 0 #fff,0 2px 6px -2px rgba(13,59,57,.28)}
+.weekdays span,.month-weekdays span,.time-slot{color:var(--g-faint)}
+.weekdays .today-col{background:rgba(11,127,115,.08);color:var(--g-sea-deep)}
+.calendar-body{background:repeating-linear-gradient(to bottom,transparent 0,transparent 68px,rgba(15,42,46,.07) 69px)}
+.cal-col.today-bg{background:rgba(11,127,115,.045)}
+.cal-event{border-radius:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.55)}
+.event-mint{background:rgba(86,188,169,.22);color:#0b564d;border-left:3px solid #2fa08c}
+.event-blue{background:rgba(114,152,216,.22);color:#294a7d;border-left:3px solid #5d86cf}
+.event-peach{background:rgba(225,123,101,.20);color:#7d3426;border-left:3px solid #d26a52}
+.month-day.outside{background:rgba(255,255,255,.22);color:#7f9296}
+.month-event{background:rgba(86,188,169,.22);color:#0b564d;border-radius:6px}
+
+/* tabs (eRx) */
+.tabs .rx-tab{color:var(--g-muted)}
+.tabs .rx-tab.active{color:var(--g-sea-deep);border-bottom-color:var(--g-sea)}
+.erx-subtabs button{background:var(--g-pane-strong);border:1px solid rgba(15,42,46,.10);color:var(--g-ink-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.85)}
+.erx-subtabs button.active{background:linear-gradient(180deg,#0c8073,#08655a);border-color:transparent;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 8px 16px -10px rgba(8,99,88,.7)}
+.erx-banner{
+  background:linear-gradient(120deg,rgba(143,211,200,.30),rgba(255,255,255,.56) 70%);border:1px solid var(--g-edge);border-radius:var(--g-r-pane);
+  box-shadow:var(--g-shadow);-webkit-backdrop-filter:var(--g-blur-lite);backdrop-filter:var(--g-blur-lite);
+}
+.erx-banner b{color:var(--g-sea-deep)}
+.erx-banner p{color:var(--g-ink-2)}
+.erx-patient-header div{
+  background:linear-gradient(180deg,rgba(255,255,255,.70),rgba(255,255,255,.58));border:1px solid var(--g-edge);border-radius:14px;
+  box-shadow:var(--g-shadow);-webkit-backdrop-filter:var(--g-blur-lite);backdrop-filter:var(--g-blur-lite);
+}
+.erx-patient-header small{color:var(--g-faint)}
+.erx-patient-header button{display:block;color:var(--g-sea-deep)}
+.erx-table{border-radius:var(--g-r-pane)}
+.erx-safety div{background:rgba(255,255,255,.50);border:1px solid rgba(15,42,46,.08);color:var(--g-ink-2)}
+.erx-safety span{background:rgba(15,42,46,.06)}
+.rx-workflow-card{transition:transform .15s,box-shadow .15s,border-color .15s}
+.rx-workflow-card:hover{background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.70));border-color:rgba(11,127,115,.28);box-shadow:var(--g-shadow-lift);transform:translateY(-1px)}
+.rx-workflow-card em{background:rgba(11,127,115,.12);color:var(--g-sea-deep)}
+.rx-workflow-card strong{color:var(--g-sea)}
+.rx-workflow-card small{color:var(--g-muted)}
+
+/* records, details, summaries: etched glass inside a pane */
+.record{border-radius:12px}
+.record:hover,.medical-record-item:hover{background:var(--g-hover)}
+.record.selected,.medical-record-item.selected{background:rgba(11,127,115,.11);box-shadow:inset 0 0 0 1px rgba(11,127,115,.18)}
+.soap-box,.record-meta-grid div,.billing-summary div,.detail-grid div,.report-preview-item,.signature,.additional-notes-field,.access-security-note{
+  background:rgba(255,255,255,.48);border:1px solid rgba(15,42,46,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.75);
+}
+.soap-box h4{color:var(--g-sea-deep)}
+.soap-box p,.clinical-note>p{color:var(--g-ink-2)}
+.record-meta-grid small,.billing-summary small,.detail-grid small,.report-preview-item small,.signature{color:var(--g-muted)}
+.report-preview-item b{color:var(--g-sea-deep)}
+.export-note{background:rgba(143,211,200,.20);border:1px solid rgba(11,127,115,.16);color:#1d4642}
+.detail-banner{background:linear-gradient(120deg,rgba(143,211,200,.30),rgba(255,255,255,.55));border:1px solid var(--g-edge);border-radius:14px}
+.detail-banner b{color:var(--g-sea-deep)}
+.pdf-preview{background:rgba(255,236,230,.72);border-color:rgba(214,74,58,.22);border-radius:12px}
+
+/* avatars (longhands so uploaded profile photos still cover the circle) */
+.avatar,.profile-avatar,.access-user-avatar{
+  background-color:#d6efe8;background-image:linear-gradient(140deg,#c9efe6,#d6e4f7);color:#0b5c53;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 0 0 1px rgba(11,127,115,.12);
+}
+.avatar.sage{background-image:linear-gradient(140deg,#dcefdf,#cfe8d6);color:#3b6e48}
+.avatar.violet{background-image:linear-gradient(140deg,#ece4f7,#dfd6f2);color:#634a8f}
+.avatar.peach{background-image:linear-gradient(140deg,#fae6da,#f4d9cb);color:#9a5a3e}
+.top-actions .avatar{width:38px;height:38px}
+
+/* student access */
+.access-user-identity small,.access-window small{color:var(--g-muted)}
+.access-user-identity .access-id{color:var(--g-faint)}
+
+/* ---------- modal + toast ---------- */
+.modal{background:rgba(8,36,38,.34);-webkit-backdrop-filter:blur(8px) saturate(120%);backdrop-filter:blur(8px) saturate(120%)}
+.modal-box{
+  border-radius:var(--g-r-shell);padding:28px 28px 24px;
+  background:linear-gradient(180deg,rgba(255,255,255,.93),rgba(255,255,255,.86));
+  border:1px solid rgba(255,255,255,.8);
+  box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(15,42,46,.06),0 40px 80px -30px rgba(5,30,32,.55);
+  animation:g-rise .22s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes g-rise{from{opacity:0;transform:translateY(8px) scale(.985)}}
+.modal-box h2{letter-spacing:-.03em;color:var(--g-ink);padding-right:96px}
+.close{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;top:18px;right:18px;font-size:22px;line-height:1;color:var(--g-ink-2)}
+.close:hover{background:rgba(15,42,46,.06)}
+.modal-expand{top:20px;right:58px;border-radius:9px;background:rgba(11,127,115,.10);color:var(--g-sea-deep)}
+.modal-expand:hover{background:rgba(11,127,115,.16)}
+.toast{
+  background:rgba(12,52,51,.88);border:1px solid rgba(255,255,255,.12);border-radius:14px;
+  -webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);
+  box-shadow:0 18px 40px -18px rgba(5,30,32,.6);animation:g-toast .25s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes g-toast{from{opacity:0;transform:translateY(8px)}}
+
+/* ---------- tablet: icon rail ---------- */
+@media(max-width:900px){
+  .sidebar{width:68px;padding:18px 8px 12px}
+  .content{margin-left:80px;width:calc(100% - 80px);padding:0 12px}
+  .sidebar .nav-item,.sidebar .nav-item:not(.active){font-size:0;justify-content:center;padding:11px 0}
+  .nav-item.active::before{left:-8px}
+  .nav-item em{position:absolute;top:3px;right:5px;margin:0;padding:1px 5px;font-size:9px}
+  .side-brand{padding:0;justify-content:center}
+  .clinic-switch{padding:8px;justify-content:center;margin:24px 0 16px}
+  .page{padding:24px 0 48px}
+}
+
+/* ---------- phone: floating bottom dock (the sidebar was hidden with no way to navigate) ---------- */
+@media(max-width:620px){
+  .sidebar{
+    display:flex;flex-direction:row;align-items:stretch;top:auto;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+    width:auto;height:auto;min-height:0;padding:6px;border-radius:22px;z-index:6;overflow:visible;
+  }
+  .side-brand,.clinic-switch{display:none}
+  .sidebar nav{
+    display:flex;flex:1 1 auto;min-width:0;gap:2px;overflow-x:auto;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent); /* hints that the dock scrolls */
+  }
+  .sidebar nav::-webkit-scrollbar{display:none}
+  .side-bottom{display:flex;margin:0;padding:0 0 0 6px;border-top:0;border-left:1px solid rgba(255,255,255,.10)}
+  .side-bottom .nav-item:not([data-page]){display:none} /* Help center has no action yet */
+  .sidebar .nav-item,.sidebar .nav-item:not(.active){
+    flex:0 0 auto;width:auto;min-width:64px;margin:0;padding:8px 8px 7px;flex-direction:column;justify-content:center;gap:4px;
+    font-size:10px;line-height:1.1;text-align:center;white-space:nowrap;
+  }
+  .nav-item.active::before{left:34%;right:34%;top:2px;bottom:auto;width:auto;height:3px;border-radius:0 0 3px 3px}
+  .nav-item em{top:3px;right:8px}
+  .content{margin:0;width:100%;padding:0 12px calc(96px + env(safe-area-inset-bottom))}
+  .mobile-menu{display:none} /* it had no action; the dock replaces it */
+  .topbar{top:10px;margin-top:10px;height:58px;padding:0 10px 0 16px}
+  .top-actions{gap:8px}
+  .page{padding:20px 0 24px}
+  .welcome h1,.page-intro h1{font-size:24px}
+  .stat-grid strong{font-size:20px}
+  .auth-panel{padding:24px 0}
+  .auth-form{padding:30px 22px 26px}
+  .erx-subtabs button{border-radius:12px}
+  /* patient directory: stack visit and concern under the name instead of four squeezed columns */
+  .directory-row{grid-template-columns:1fr 32px;gap:6px 10px;padding:14px 16px}
+  .directory-row>.patient-name{grid-column:1;grid-row:1}
+  .directory-row>button{grid-column:2;grid-row:1}
+  .directory-row>span{grid-column:1;padding-left:38px}
+  .toast{left:12px;right:12px;bottom:calc(94px + env(safe-area-inset-bottom))}
+}
+
+/* ---------- graceful fallbacks ---------- */
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  .card,.stat-grid article,.erx-table,.rx-workflow-card,.topbar,.auth-form,.erx-patient-header div{background:rgba(255,255,255,.95)}
+  .sidebar{background:#0d3d3b}
+}
+@media(prefers-reduced-transparency:reduce){
+  .card,.stat-grid article,.erx-table,.rx-workflow-card,.topbar,.auth-form,.erx-patient-header div,.erx-banner,.training-banner{background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none}
+  .sidebar{background:#0d3d3b;-webkit-backdrop-filter:none;backdrop-filter:none}
+  .modal{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(8,36,38,.55)}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .auth-art::after{-webkit-mask-image:none;mask-image:none}
+}
+
+/* ---------- pharmacy directory & messages (used by pharmacy.js) ---------- */
+.erx-table-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 12px 20px;border-bottom:1px solid var(--g-row)}
+.erx-table-head h3{padding:0;margin:0;border:0}
+.erx-table-head .primary{padding:9px 14px;font-size:13px}
+.erx-pharmacy-grid{grid-template-columns:1.3fr .8fr .9fr .9fr 1.8fr}
+.erx-static,.erx-static:hover{cursor:default;background:transparent}
+.pharmacy-message-text{white-space:pre-line;margin-top:14px}
+.modal-box input,.modal-box select,.modal-box textarea{font-weight:400}
+.modal-box input[readonly]{background:rgba(15,42,46,.04);border-style:dashed;color:var(--g-ink-2)}
+/* read-only detail windows: hide the "Save details" button there, since nothing can be saved (the × still closes) */
+#modal[data-type="details"] #modalForm>button[type="submit"]{display:none}
