@@ -7,9 +7,13 @@
    roll back. app.js is not modified.
 
    Four sections: Specialist Referrals, Diagnostic Orders, Procedure Orders and
-   Service Prior Authorizations (non-medication; medication PAs stay under
-   Prescriptions). Records are saved with the rest of the shared clinic data
-   under the key "referralsOrders".
+   Service Prior Authorizations (non-medication). Records are saved with the
+   rest of the shared clinic data under the key "referralsOrders".
+
+   Also upgrades Prescriptions > Medication Prior Authorizations: the existing
+   priorAuthorizations records become editable PAs (status, insurance response,
+   follow-up notes, activity history) using the same dialog. Old fields
+   (assigned, submitted, expires) are kept in step for app.js.
 
    Rules from the SynClinic spec:
    - Referral / order status and PA status are tracked separately. Approving a
@@ -70,6 +74,8 @@
   ];
   const BASE_INSURERS = ['UnitedCare','BlueCross PPO','Allied Health'];
   const METHODS = ['Portal','Fax','Phone','Electronic PA'];
+  const METHODS_MED = ['Insurance Portal','Fax','Phone','Electronic PA'];
+  const RESPONSE_FIELDS = ['pendingCurrent','pendingRemarks','infoReceived','infoRequested','infoDeadline','infoAction','authNumber','approvalDate','effectiveDate','expirationDate','approvedService','approvedQuantity','denialDate','denialReason','appealInstructions'];
   const SERVICE_TYPES = [['Specialist','Specialist service'],['Diagnostic','Diagnostic test'],['Procedure','Procedure']];
 
   const T = {
@@ -93,16 +99,25 @@
       statuses:['Draft','Pending','Additional Info Needed','Approved','Denied','Cancelled / Closed'], defaultStatus:'Draft',
       clinical:['patient','serviceType','service','provider','diagnosis','icd11','cpt'],
       fields:['patientId','patient','serviceType','service','provider','facility','diagnosis','icd11','cpt','insurance','memberId','link','paRef','method','submitted','status','assignedTo','followUp',
-        'pendingCurrent','pendingRemarks','infoReceived','infoRequested','infoDeadline','infoAction','authNumber','approvalDate','effectiveDate','expirationDate','approvedService','denialDate','denialReason','appealInstructions']}
+        'pendingCurrent','pendingRemarks','infoReceived','infoRequested','infoDeadline','infoAction','authNumber','approvalDate','effectiveDate','expirationDate','approvedService','denialDate','denialReason','appealInstructions']},
+    medPAs: {tab:'Medication Prior Authorizations', one:'Medication prior authorization', prefix:'MPA', newBtn:'New PA', create:'Create PA',
+      blurb:'Track and manage prior authorization requests for prescription medications.', search:'Search patient, medication or reference #',
+      statuses:['Draft','Pending','Additional Info Needed','Approved','Denied','Cancelled / Closed'], defaultStatus:'Draft',
+      clinical:['patient','medication','provider','diagnosis','icd11'],
+      fields:['patientId','patient','medication','provider','diagnosis','icd11','insurance','memberId','paRef','method','submittedDate','status','assignedTo','followUp',
+        'pendingCurrent','pendingRemarks','infoReceived','infoRequested','infoDeadline','infoAction','authNumber','approvalDate','effectiveDate','expirationDate','approvedQuantity','denialDate','denialReason','appealInstructions']}
   };
   const ORDER = ['referrals','diagnostic','procedures','servicePAs'];
   const ORDER_TYPES = ['referrals','diagnostic','procedures'];
+  const ALL_TYPES = [...ORDER, 'medPAs'];
+  const isPA = type => type === 'servicePAs' || type === 'medPAs';
+  const subKey = type => type === 'medPAs' ? 'submittedDate' : 'submitted';   // medication PAs keep the old "submitted" text for app.js
   const CLOSED = new Set(['Completed','Cancelled','Approved','Denied','Cancelled / Closed']);
   const SUBMITTED = new Set(['Pending','Additional Info Needed','Approved','Denied']);
   const TONE = {'Draft':'gray','Pending / Sent':'amber','Received by Specialist':'blue','Ordered':'blue','Sent to Facility':'blue','Pending Scheduling':'amber','Scheduled':'blue','Completed':'green','Cancelled':'red',
     'Pending':'amber','Additional Info Needed':'orange','Approved':'green','Denied':'red','Cancelled / Closed':'gray'};
-  const LABELS = {patient:'patient',provider:'provider',specialty:'specialty',reason:'reason',diagnosis:'diagnosis',icd11:'ICD-11 code',cpt:'CPT / HCPCS code',priority:'priority',date:'order date',test:'test',category:'category',procedure:'procedure',serviceType:'service type',service:'requested service'};
-  const mainOf = (type, r) => type === 'referrals' ? r.specialty : type === 'diagnostic' ? r.test : type === 'procedures' ? r.procedure : r.service;
+  const LABELS = {medication:'medication',patient:'patient',provider:'provider',specialty:'specialty',reason:'reason',diagnosis:'diagnosis',icd11:'ICD-11 code',cpt:'CPT / HCPCS code',priority:'priority',date:'order date',test:'test',category:'category',procedure:'procedure',serviceType:'service type',service:'requested service'};
+  const mainOf = (type, r) => type === 'referrals' ? r.specialty : type === 'diagnostic' ? r.test : type === 'procedures' ? r.procedure : type === 'medPAs' ? r.medication : r.service;
 
   /* ---------- sample cases (spec section 7), dated relative to the first load ---------- */
   function seedStore(){
@@ -206,8 +221,10 @@
   const state = {tab:'referrals', filters:{}};
   ORDER.forEach(k => { state.filters[k] = {q:'', status:'', extra:''}; });
   const isVisible = () => { const el = document.getElementById('referrals'); return Boolean(el && el.classList.contains('active')); };
-  const findRec = (type, id) => (store[type] || []).find(r => r.id === id) || null;
-  const allRecords = () => ORDER.flatMap(k => store[k].map(r => ({...r, _type: k})));
+  const medList = () => (typeof priorAuthorizations !== 'undefined' && Array.isArray(priorAuthorizations)) ? priorAuthorizations : [];
+  const list = type => type === 'medPAs' ? medList() : (store[type] || []);
+  const findRec = (type, id) => list(type).find(r => r && r.id === id) || null;
+  const allRecords = () => ALL_TYPES.flatMap(k => list(k).map(r => ({...r, _type: k})));
 
   /* ---------- saved with the rest of the shared data ---------- */
   const baseCloudState = currentCloudState;
@@ -216,10 +233,9 @@
   applyCloudState = function(data = {}){
     baseApplyCloudState(data);
     // Saved data without this module (first run, or saved by an older copy of the page): keep this browser's records.
-    if (data && data.referralsOrders && typeof data.referralsOrders === 'object') {
-      store = normalizeStore(repairSharedText(data.referralsOrders));
-      if (isVisible() && !ctx) renderList();
-    }
+    if (data && data.referralsOrders && typeof data.referralsOrders === 'object') store = normalizeStore(repairSharedText(data.referralsOrders));
+    upgradeMedPAs();
+    if (!ctx) refreshViews();
   };
   function persist(){
     if (typeof queueCloudSave === 'function') queueCloudSave();
@@ -227,6 +243,101 @@
   }
   function savedToast(message){
     toast(persist() ? message : `${message} — on this device only. Shared data isn't connected, so it will be lost when the page reloads.`);
+  }
+
+  /* ---------- medication prior authorizations (Prescriptions tab) ---------- */
+  const rxList = () => (typeof prescriptions !== 'undefined' && Array.isArray(prescriptions)) ? prescriptions : [];
+  const findRx = d => rxList().find(r => r && r.patient === d.patient && r.medication === d.medication) || null;
+  const rxDate = n => { const d = new Date(); d.setDate(d.getDate() + n); return `${MONTHS[d.getMonth()]} ${pad(d.getDate())}, ${d.getFullYear()}`; };
+  function legacyIso(text){ const d = new Date(text); return text && !isNaN(d) ? isoDay(d) : ''; }
+  // Keep the fields app.js still reads (dashboard task count, old table) in step.
+  function syncLegacyMed(r){
+    r.assigned = r.assignedTo || r.assigned || '';
+    r.submitted = r.submittedDate ? fmtDate(r.submittedDate) : '';
+    r.expires = r.status === 'Approved' && r.expirationDate ? fmtDate(r.expirationDate) : '';
+  }
+  function syncSignature(){ if (typeof prescriptionStateSnapshot === 'function' && typeof prescriptionStateSignature !== 'undefined') prescriptionStateSignature = prescriptionStateSnapshot(); }
+
+  // Sample cases from the spec. The three original records are upgraded in place; Ozempic is added.
+  function medSamples(){
+    const y = new Date().getFullYear();
+    const ev = (day, h, m, by, text) => ({at: stamp(day, h, m), by, text});
+    const base = (id, i, patientId, patient, createdDay, by) => ({id, number:`MPA-${y}-${String(i).padStart(4, '0')}`, patientId, patient, createdAt: stamp(createdDay, 9, 0), createdBy: by});
+    return {
+      lisinopril: {...base('MPA-S1', 1, '00000003', 'Marcus Chen', -7, 'Alex Morgan'), medication:'Lisinopril 20 mg tablet', provider:'Dr. Alex Morgan', diagnosis:'Hypertension', icd11:'BA00',
+        insurance:'UnitedCare', memberId:'UC-118204563', paRef:`PA-${y}-0012`, method:'Insurance Portal', submittedDate: shiftDay(-6), status:'Pending', assignedTo:'Alex Morgan', followUp: shiftDay(2),
+        pendingCurrent:'Under clinical review', pendingRemarks:'Request received. No additional documents needed at this time.',
+        notes:[ev(-1, 10, 15, 'Alex Morgan', `Contacted UnitedCare to follow up on the pending PA for Lisinopril. The representative confirmed the request is still under review. No additional documents needed at this time. Follow-up scheduled for ${fmtDate(shiftDay(2))}.`),
+               ev(-6, 14, 30, 'Alex Morgan', `Submitted the PA through the insurance portal with the last two blood pressure readings and the most recent visit note. Reference # PA-${y}-0012.`)],
+        history:[ev(-1, 10, 16, 'Alex Morgan', `Next follow-up set for ${fmtDate(shiftDay(2))}`), ev(-1, 10, 15, 'Alex Morgan', 'Follow-up note added'), ev(-6, 14, 31, 'Alex Morgan', 'Follow-up note added'),
+                 ev(-6, 14, 30, 'Alex Morgan', `PA submitted via Insurance Portal. Reference # PA-${y}-0012`), ev(-7, 9, 0, 'Alex Morgan', 'Medication prior authorization created as Draft')]},
+      fluticasone: {...base('MPA-S2', 2, '00000001', 'Jordan Olsen', -10, 'Care Team'), medication:'Fluticasone nasal spray', provider:'Dr. Alex Morgan', diagnosis:'Allergic rhinitis', icd11:'CA08.0',
+        insurance:'Allied Health', memberId:'AH-448210937', paRef:`PA-${y}-0034`, method:'Fax', submittedDate: shiftDay(-9), status:'Additional Info Needed', assignedTo:'Care Team', followUp: shiftDay(1),
+        infoReceived: shiftDay(-3), infoRequested:'Clinical notes showing a trial of a formulary alternative (such as cetirizine), how long the symptoms have lasted, and why the preferred product is not suitable.',
+        infoDeadline: shiftDay(4), infoAction:"Asked Dr. Alex Morgan's office for the last two visit notes and the cetirizine history. Provider notified of the request.",
+        notes:[ev(-1, 15, 40, 'Care Team', 'Followed up with Allied Health. The request stays open until the documents arrive. Still waiting on the visit notes from the provider.'),
+               ev(-2, 11, 0, 'Care Team', 'Notified Dr. Alex Morgan that Allied Health needs documentation of the cetirizine trial and symptom history.')],
+        history:[ev(-1, 15, 41, 'Care Team', `Next follow-up set for ${fmtDate(shiftDay(1))}`), ev(-1, 15, 40, 'Care Team', 'Follow-up note added'), ev(-2, 11, 0, 'Care Team', 'Follow-up note added'),
+                 ev(-3, 9, 31, 'Care Team', 'Status changed from Pending to Additional Info Needed'), ev(-3, 9, 30, 'Care Team', 'Insurance response received: additional clinical information requested'),
+                 ev(-9, 10, 0, 'Care Team', `PA submitted via Fax. Reference # PA-${y}-0034`), ev(-10, 9, 0, 'Care Team', 'Medication prior authorization created as Draft')]},
+      sumatriptan: {...base('MPA-S3', 3, '00000004', 'Elena Rossi', -21, 'Alex Morgan'), medication:'Sumatriptan 50 mg tablet', provider:'Dr. Alex Morgan', diagnosis:'Migraine', icd11:'8A80',
+        insurance:'BlueCross PPO', memberId:'BCP-77120456', paRef:`PA-${y}-0067`, method:'Electronic PA', submittedDate: shiftDay(-20), status:'Approved', assignedTo:'Alex Morgan', followUp:'',
+        authNumber:'AUTH-RX-448291', approvalDate: shiftDay(-16), effectiveDate: shiftDay(-16), expirationDate: shiftDay(166), approvedQuantity:'9 tablets per 30 days for 6 months',
+        notes:[ev(-16, 11, 20, 'Alex Morgan', 'Approval received through the ePA portal. Pharmacy notified so the prescription can be filled.')],
+        history:[ev(-16, 11, 21, 'Alex Morgan', 'Follow-up note added'), ev(-16, 11, 0, 'Alex Morgan', 'Status changed from Pending to Approved'),
+                 ev(-16, 10, 59, 'Alex Morgan', `Insurance response received: PA approved. Authorization # AUTH-RX-448291, valid ${fmtDate(shiftDay(-16))} – ${fmtDate(shiftDay(166))}`),
+                 ev(-20, 10, 0, 'Alex Morgan', `PA submitted via Electronic PA. Reference # PA-${y}-0067`), ev(-21, 9, 0, 'Alex Morgan', 'Medication prior authorization created as Draft')]},
+      ozempic: {...base('MPA-S4', 4, '00000002', 'Samira Patel', -11, 'Alex Morgan'), medication:'Ozempic 0.25 mg pen', provider:'Dr. Sync', diagnosis:'Type 2 diabetes mellitus', icd11:'5A11',
+        insurance:'BlueCross PPO', memberId:'BCP-55031872', paRef:`PA-${y}-0045`, method:'Insurance Portal', submittedDate: shiftDay(-10), status:'Denied', assignedTo:'Alex Morgan', followUp:'',
+        denialDate: shiftDay(-3), denialReason:'Step therapy not met. The plan requires at least 90 days of metformin at the maximum tolerated dose, and an HbA1c result from the last 90 days, before covering a GLP-1 medication.',
+        appealInstructions:'The prescriber may submit a letter of medical necessity with the metformin history and a recent HbA1c, or request a peer-to-peer review. Appeals must be filed within 60 days of the denial date.',
+        notes:[ev(-3, 14, 5, 'Alex Morgan', 'Denial received. Sent the denial reason to Dr. Sync and asked whether to appeal with a letter of medical necessity or continue metformin first.'),
+               ev(-10, 15, 10, 'Alex Morgan', 'Pharmacy rejected the claim with "prior authorization required". Submitted the PA through the insurance portal with the latest visit note.')],
+        history:[ev(-3, 14, 6, 'Alex Morgan', 'Follow-up note added'), ev(-3, 14, 0, 'Alex Morgan', 'Status changed from Pending to Denied'), ev(-3, 13, 59, 'Alex Morgan', 'Insurance response received: PA denied. Step therapy not met.'),
+                 ev(-10, 15, 11, 'Alex Morgan', 'Follow-up note added'), ev(-10, 15, 10, 'Alex Morgan', `PA submitted via Insurance Portal. Reference # PA-${y}-0045`), ev(-11, 9, 0, 'Alex Morgan', 'Medication prior authorization created as Draft')]}
+    };
+  }
+  const LEGACY_MED = [
+    {key:'lisinopril', medication:'Lisinopril 20 mg tablet', patient:'Marcus Chen', status:'Pending'},
+    {key:'fluticasone', medication:'Fluticasone nasal spray', patient:'Jordan Olsen', status:'Additional Info Needed'},
+    {key:'sumatriptan', medication:'Sumatriptan 50 mg tablet', patient:'Elena Rossi', status:'Approved'}
+  ];
+  // Runs on load and after shared data arrives. It only fills in records that have not been upgraded yet,
+  // and it does not trigger a save by itself (the upgraded records are saved with the next normal change).
+  function upgradeMedPAs(){
+    const meds = medList(); if (!meds.length && typeof priorAuthorizations === 'undefined') return;
+    let changed = false, samples = null;
+    const y = new Date().getFullYear();
+    meds.forEach((r, i) => {
+      if (!r) return;
+      if (r.id) { if (!Array.isArray(r.notes)) r.notes = []; if (!Array.isArray(r.history)) r.history = []; return; }
+      changed = true;
+      const seed = LEGACY_MED.find(x => x.medication === r.medication && x.patient === r.patient && x.status === r.status);
+      if (seed) { samples = samples || medSamples(); Object.assign(r, samples[seed.key]); syncLegacyMed(r); return; }
+      const p = findPatient(null, r.patient), rx = findRx(r);
+      Object.assign(r, {id:`MPA-L${i + 1}`, number:`MPA-${y}-${900 + i}`, patientId: p ? p.id : '', provider: r.provider || (rx && rx.prescriber) || '',
+        assignedTo: r.assignedTo || r.assigned || '', submittedDate: r.submittedDate || legacyIso(r.submitted), expirationDate: r.status === 'Approved' ? (r.expirationDate || legacyIso(r.expires)) : (r.expirationDate || ''),
+        method: r.method || '', paRef: r.paRef || '', followUp: r.followUp || '', notes: [], history: [], createdBy: r.createdBy || 'Clinic', createdAt: r.createdAt || ''});
+      syncLegacyMed(r);
+    });
+    if (!meds.some(r => r && /ozempic/i.test(r.medication || ''))) {
+      samples = samples || medSamples(); const oz = samples.ozempic; syncLegacyMed(oz); meds.push(oz); changed = true;
+    }
+    const rxs = rxList();
+    if (rxs.length && !rxs.some(r => r && r.patient === 'Samira Patel' && /ozempic/i.test(r.medication || ''))) {
+      rxs.push({patient:'Samira Patel', medication:'Ozempic 0.25 mg pen', directions:'Inject 0.25 mg under the skin once weekly', status:'Failed / Rejected', date: rxDate(-11), kind:'active',
+        prescriber:'Dr. Sync', refills:'No refills', quantity:'1 pen', lastFilled:'', dose:'Inject 0.25 mg under the skin once weekly', pharmacy:'CarePlus Pharmacy'});
+      changed = true;
+    }
+    if (changed) syncSignature();
+  }
+
+  const rxPageActive = () => { const el = document.getElementById('prescriptions'); return Boolean(el && el.classList.contains('active')); };
+  function refreshViews(){
+    if (isVisible()) renderList();
+    const root = document.getElementById('roMedPa');
+    if (root && rxPageActive()) renderTable('medPAs', root);
+    if (typeof updateDashboardStats === 'function') { try { updateDashboardStats(); } catch (e) { /* dashboard not ready */ } }
   }
 
   /* ---------- people, insurers and other lists ---------- */
@@ -273,14 +384,17 @@
   const validCpt = code => /^(\d{4}[0-9FTU]|[A-V]\d{4})(-[0-9A-Z]{2})*$/i.test(String(code));
   function nextNumber(type){
     const y = new Date().getFullYear(), prefix = `${T[type].prefix}-${y}-`;
-    const max = Math.max(0, ...store[type].map(r => String(r.number || '').startsWith(prefix) ? Number(String(r.number).slice(prefix.length)) || 0 : 0));
+    const max = Math.max(0, ...list(type).map(r => String(r.number || '').startsWith(prefix) ? Number(String(r.number).slice(prefix.length)) || 0 : 0));
     return `${prefix}${String(max + 1).padStart(4, '0')}`;
   }
+  // Simulated reference numbers are marked SIM- so they are never mistaken for a payer-issued number.
   function nextPaRef(){
-    const y = new Date().getFullYear(), prefix = `PA-${y}-`;
-    const max = Math.max(100, ...store.servicePAs.map(r => String(r.paRef || '').startsWith(prefix) ? Number(String(r.paRef).slice(prefix.length)) || 0 : 0));
+    const y = new Date().getFullYear(), prefix = `SIM-PA-${y}-`;
+    const max = Math.max(0, ...[...list('servicePAs'), ...list('medPAs')].map(r => String(r.paRef || '').startsWith(prefix) ? Number(String(r.paRef).slice(prefix.length)) || 0 : 0));
     return `${prefix}${String(max + 1).padStart(4, '0')}`;
   }
+
+  upgradeMedPAs();
 
   /* ---------- page, sidebar item and dialog shell ---------- */
   const navAnchor = document.querySelector('.nav-item[data-page="prescriptions"]');
@@ -318,17 +432,19 @@
   };
 
   /* ---------- list view ---------- */
+  ALL_TYPES.forEach(k => { if (!state.filters[k]) state.filters[k] = {q:'', status:'', extra:''}; });
+  const panel = () => document.querySelector('#referrals .ro-panel');
   function renderAll(){
     document.getElementById('roNew').textContent = `+ ${T[state.tab].newBtn}`;
     document.getElementById('roPanelTitle').textContent = T[state.tab].tab;
     document.getElementById('roPanelBlurb').textContent = T[state.tab].blurb;
-    renderTabs(); renderFilters(); renderTable();
+    renderTabs(); mountList(state.tab, panel());
   }
-  function renderList(){ renderTabs(); renderTable(); }
+  function renderList(){ renderTabs(); renderTable(state.tab, panel()); }
   function renderTabs(){
     const el = document.getElementById('roTabs');
     el.innerHTML = ORDER.map(k => {
-      const open = store[k].filter(r => !CLOSED.has(r.status)).length;
+      const open = list(k).filter(r => !CLOSED.has(r.status)).length;
       return `<button type="button" role="tab" id="roTab-${k}" data-ro-tab="${k}" aria-selected="${k === state.tab}" class="${k === state.tab ? 'active' : ''}">${esc(T[k].tab)} <span class="ro-count">${open} open</span></button>`;
     }).join('');
     el.querySelectorAll('[data-ro-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.roTab; renderAll(); });
@@ -336,19 +452,22 @@
   function extraFilter(type){
     if (type === 'referrals') return {label:'All specialties', values: unique(store.referrals.map(r => r.specialty)).sort()};
     if (type === 'diagnostic') return {label:'All categories', values:['Laboratory','Imaging']};
-    if (type === 'servicePAs') return {label:'All insurance', values: unique(store.servicePAs.map(r => r.insurance)).sort()};
+    if (isPA(type)) return {label:'All insurance', values: unique(list(type).map(r => r.insurance)).sort()};
     return null;
   }
-  function renderFilters(){
-    const type = state.tab, f = state.filters[type], extra = extraFilter(type);
+  // root holds a .ro-filters and a .ro-table element
+  function mountList(type, root){
+    if (!root) return;
+    const f = state.filters[type], extra = extraFilter(type);
     const opt = (v, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(v)}</option>`;
-    document.getElementById('roFilters').innerHTML = `
-      <div class="search"><span aria-hidden="true">⌕</span><input type="search" id="roSearch" placeholder="${esc(T[type].search)}" aria-label="${esc(T[type].search)}" value="${esc(f.q)}"></div>
-      <select class="filter" id="roStatus" aria-label="Filter by status"><option value="">All statuses</option>${T[type].statuses.map(s => opt(s, f.status)).join('')}</select>
-      ${extra ? `<select class="filter" id="roExtra" aria-label="${esc(extra.label)}"><option value="">${esc(extra.label)}</option>${extra.values.map(v => opt(v, f.extra)).join('')}</select>` : ''}`;
-    document.getElementById('roSearch').oninput = e => { f.q = e.target.value; renderTable(); };
-    document.getElementById('roStatus').onchange = e => { f.status = e.target.value; renderTable(); };
-    const ex = document.getElementById('roExtra'); if (ex) ex.onchange = e => { f.extra = e.target.value; renderTable(); };
+    root.querySelector('.ro-filters').innerHTML = `
+      <div class="search"><span aria-hidden="true">⌕</span><input type="search" class="ro-f-q" placeholder="${esc(T[type].search)}" aria-label="${esc(T[type].search)}" value="${esc(f.q)}"></div>
+      <select class="filter ro-f-status" aria-label="Filter by status"><option value="">All statuses</option>${T[type].statuses.map(s => opt(s, f.status)).join('')}</select>
+      ${extra ? `<select class="filter ro-f-extra" aria-label="${esc(extra.label)}"><option value="">${esc(extra.label)}</option>${extra.values.map(v => opt(v, f.extra)).join('')}</select>` : ''}`;
+    root.querySelector('.ro-f-q').oninput = e => { f.q = e.target.value; renderTable(type, root); };
+    root.querySelector('.ro-f-status').onchange = e => { f.status = e.target.value; renderTable(type, root); };
+    const ex = root.querySelector('.ro-f-extra'); if (ex) ex.onchange = e => { f.extra = e.target.value; renderTable(type, root); };
+    renderTable(type, root);
   }
   const pill = status => `<span class="ro-pill" data-tone="${TONE[status] || 'gray'}">${esc(status || 'Draft')}</span>`;
   const cell = (label, html, cls = '') => `<span class="${cls}" data-label="${esc(label)}">${html}</span>`;
@@ -367,34 +486,39 @@
     referrals: ['Patient','Specialty','Referred to','Referring provider','Referral date','Status','Assigned to',''],
     diagnostic: ['Patient','Diagnostic test','Ordering provider','Order date','Priority','Status','Assigned to',''],
     procedures: ['Patient','Procedure','Ordering provider','Facility','Order date','Status','Assigned to',''],
-    servicePAs: ['Patient','Service / procedure','Insurance','PA reference #','Status','Date submitted','Next follow-up','Assigned to','']
+    servicePAs: ['Patient','Service / procedure','Insurance','PA reference #','Status','Date submitted','Next follow-up','Assigned to',''],
+    medPAs: ['Patient','Medication','Insurance','PA reference #','Status','Date submitted','Next follow-up','Assigned to','']
   };
   function rowCells(type, r){
     const who = cell('Patient', `<b>${esc(r.patient)}</b><small>${esc(r.number)}</small>`, 'ro-cell-main');
-    const status = cell('Status', `${pill(r.status)}${type === 'servicePAs' ? '' : paLine(r)}`, 'ro-cell-status');
+    const status = cell('Status', `${pill(r.status)}${isPA(type) ? '' : paLine(r)}`, 'ro-cell-status');
     const assigned = cell('Assigned to', esc(r.assignedTo || '—'));
     if (type === 'referrals') return [who, cell('Specialty', esc(r.specialty)), cell('Referred to', esc(r.referredTo)), cell('Referring provider', esc(r.provider)), cell('Referral date', esc(fmtDate(r.date))), status, assigned];
     if (type === 'diagnostic') return [who, cell('Diagnostic test', `${esc(r.test)}<small>${esc(r.category)}</small>`), cell('Ordering provider', esc(r.provider)), cell('Order date', esc(fmtDate(r.date))), cell('Priority', `<span class="ro-prio" data-prio="${esc(r.priority)}">${esc(r.priority)}</span>`), status, assigned];
     if (type === 'procedures') return [who, cell('Procedure', esc(r.procedure)), cell('Ordering provider', esc(r.provider)), cell('Facility', esc(r.facility)), cell('Order date', esc(fmtDate(r.date))), status, assigned];
+    const refCell = cell('PA reference #', r.paRef ? esc(r.paRef) : '<span class="ro-muted">Not submitted</span>');
+    if (type === 'medPAs') return [who, cell('Medication', `${esc(r.medication)}${r.provider ? `<small>${esc(r.provider)}</small>` : ''}`), cell('Insurance', esc(r.insurance)), refCell, status,
+      cell('Date submitted', r.submittedDate ? esc(fmtDate(r.submittedDate)) : '—'), cell('Next follow-up', followUpCell(r)), assigned];
     const stype = (SERVICE_TYPES.find(s => s[0] === r.serviceType) || [, r.serviceType])[1];
     return [who, cell('Service', `${esc(r.service)}<small>${esc(stype || '')}</small>`), cell('Insurance', esc(r.insurance)), cell('PA reference #', r.paRef ? esc(r.paRef) : '<span class="ro-muted">Not submitted</span>'), status,
       cell('Date submitted', r.submitted ? esc(fmtDate(r.submitted)) : '—'), cell('Next follow-up', followUpCell(r)), assigned];
   }
-  function sortKey(type, r){ return type === 'servicePAs' ? (r.submitted || (r.createdAt || '').slice(0, 10)) : (r.date || ''); }
-  function renderTable(){
-    const type = state.tab, f = state.filters[type], q = f.q.trim().toLowerCase();
-    const rows = store[type].filter(r => {
+  function sortKey(type, r){ return isPA(type) ? (r[subKey(type)] || (r.createdAt || '').slice(0, 10)) : (r.date || ''); }
+  function renderTable(type, root){
+    if (!root) return;
+    const f = state.filters[type], q = f.q.trim().toLowerCase();
+    const rows = list(type).filter(r => r && r.id).filter(r => {
       if (f.status && r.status !== f.status) return false;
       if (f.extra && (type === 'referrals' ? r.specialty : type === 'diagnostic' ? r.category : r.insurance) !== f.extra) return false;
       if (!q) return true;
       return [r.patient, r.number, mainOf(type, r), r.provider, r.facility, r.referredTo, r.paRef, r.insurance, r.assignedTo, r.authNumber, r.category]
         .some(v => String(v || '').toLowerCase().includes(q));
     }).sort((a, b) => sortKey(type, b).localeCompare(sortKey(type, a)) || String(b.number).localeCompare(String(a.number)));
-    const el = document.getElementById('roTable');
+    const el = root.querySelector('.ro-table');
     if (!rows.length) {
       const filtered = f.q || f.status || f.extra;
-      el.innerHTML = `<div class="ro-empty"><p>${filtered ? `No ${esc(T[type].tab.toLowerCase())} match these filters.` : `No ${esc(T[type].tab.toLowerCase())} yet.`}</p>${filtered ? '<button type="button" class="filter" id="roClear">Clear filters</button>' : ''}</div>`;
-      const c = document.getElementById('roClear'); if (c) c.onclick = () => { state.filters[type] = {q:'', status:'', extra:''}; renderFilters(); renderTable(); };
+      el.innerHTML = `<div class="ro-empty"><p>${filtered ? `No ${esc(T[type].tab.toLowerCase())} match these filters.` : `No ${esc(T[type].tab.toLowerCase())} yet.`}</p>${filtered ? '<button type="button" class="filter ro-clear">Clear filters</button>' : ''}</div>`;
+      const c = el.querySelector('.ro-clear'); if (c) c.onclick = () => { state.filters[type] = {q:'', status:'', extra:''}; mountList(type, root); };
       return;
     }
     el.innerHTML = `<div class="ro-head ro-cols-${type}" role="row">${HEADS[type].map(h => `<span role="columnheader">${esc(h)}</span>`).join('')}</div>`
@@ -404,13 +528,32 @@
   }
   document.getElementById('roNew').onclick = () => openForm(state.tab, null);
 
+  // The eRx tab keeps its internal key "Prior Authorizations"; only the label changes.
+  if (typeof erxRows === 'function' && typeof renderPrescriptions === 'function') {
+    const baseErxRows = erxRows;
+    erxRows = function(){
+      if (activeErxTab !== 'Prior Authorizations') return baseErxRows();
+      if (medList().some(r => r && !r.id)) upgradeMedPAs();
+      return `<section class="erx-table ro-medpa" id="roMedPa"><div class="ro-panel-head ro-medpa-head"><div><h3>Medication Prior Authorizations</h3><p>${esc(T.medPAs.blurb)}</p></div><button class="primary" type="button" id="roMedPaNew">+ New PA</button></div><div class="ro-filters"></div><div class="ro-table"></div><p class="ro-sim-note ro-medpa-note">Simulated cases for student practice. PA requirements vary by plan; these medications do not always need PA in real life.</p></section>`;
+    };
+    const baseRenderRx = renderPrescriptions;
+    renderPrescriptions = function(tab = activeErxTab){
+      baseRenderRx(tab);
+      const label = document.querySelector('#prescriptions [data-erx-tab="Prior Authorizations"]');
+      if (label) label.textContent = 'Medication Prior Authorizations';
+      const root = document.getElementById('roMedPa');
+      if (root) { mountList('medPAs', root); document.getElementById('roMedPaNew').onclick = () => openForm('medPAs', null); }
+    };
+  }
+
   /* ---------- dialog: new + review forms ---------- */
 
   function newDraft(type, opts){
     const d = {status: T[type].defaultStatus, assignedTo: myName(), insurance:'', memberId:''};
-    if (type !== 'servicePAs') Object.assign(d, {priority:'Routine', date: todayIso(), authRequired:false});
+    if (!isPA(type)) Object.assign(d, {priority:'Routine', date: todayIso(), authRequired:false});
     if (type === 'diagnostic') d.category = 'Laboratory';
     if (type === 'servicePAs') Object.assign(d, {method:'Portal', serviceType:''});
+    if (type === 'medPAs') Object.assign(d, {method:'Insurance Portal', rxMode:''});
     if (opts.fromSource) { const src = findRec(opts.fromSource.type, opts.fromSource.id); if (src) applySource(d, opts.fromSource.type, src); }
     return d;
   }
@@ -425,25 +568,27 @@
   }
   function lockedSet(){
     const {type, mode, draft} = ctx, s = new Set(), rec = ctx.id ? findRec(type, ctx.id) : null;
-    ctx.linkLocked = new Set();
-    if (mode === 'review' && rec && rec.status !== 'Draft' && !isAdmin()) T[type].clinical.forEach(f => s.add(f));
+    ctx.linkLocked = new Set(); ctx.clinicalLocked = new Set();
+    if (mode === 'review' && rec && rec.status !== 'Draft' && !isAdmin()) T[type].clinical.forEach(f => { s.add(f); ctx.clinicalLocked.add(f); });
+    const add = f => { if (!s.has(f)) ctx.linkLocked.add(f); s.add(f); };
+    if (type === 'medPAs' && draft.rxMode === 'rx') { add('medication'); const rx = findRx(draft); if (rx && rx.prescriber) add('provider'); }
     if (type === 'servicePAs' && draft.link) {
-      const add = f => { if (!s.has(f)) ctx.linkLocked.add(f); s.add(f); };
       ['patient','serviceType','service','provider','diagnosis','icd11'].forEach(add);
       const src = findRec(draft.link.type, draft.link.id);
       if (src && src.cpt) add('cpt');
       if (src && (src.referredTo || src.facility)) add('facility');
     }
-    if (type !== 'servicePAs' && mode === 'review' && draft.paId) s.add('patient');
+    if (ORDER_TYPES.includes(type) && mode === 'review' && draft.paId) s.add('patient');
     return s;
   }
 
   function openForm(type, id, opts = {}){
     const rec = id ? findRec(type, id) : null;
-    if (id && !rec) { toast('This record is no longer available. The list has been refreshed.'); renderList(); return; }
+    if (id && !rec) { toast('This record is no longer available. The list has been refreshed.'); refreshViews(); return; }
     const opener = opts.opener || (ctx ? ctx.opener : document.activeElement);
     ctx = {type, mode: rec ? 'review' : 'new', id: rec ? rec.id : null, original: rec ? JSON.parse(JSON.stringify(rec)) : null,
       draft: rec ? JSON.parse(JSON.stringify(rec)) : newDraft(type, opts), fromSource: opts.fromSource || null, opener, defs: [], locked: new Set()};
+    if (type === 'medPAs' && rec) ctx.draft.rxMode = findRx(ctx.draft) ? 'rx' : (ctx.draft.medication ? 'manual' : '');
     const modal = document.getElementById('roModal');
     modal.classList.remove('hidden'); document.body.classList.add('ro-modal-open');
     renderModal(false);
@@ -459,7 +604,7 @@
     if (!force && serializeForm() !== ctx.baseline && !window.confirm('Discard your unsaved changes?')) return;
     const opener = ctx.opener; ctx = null;
     document.getElementById('roModal').classList.add('hidden'); document.body.classList.remove('ro-modal-open');
-    renderList();
+    refreshViews();
     if (opener && document.body.contains(opener)) opener.focus();
   }
   document.getElementById('roX').onclick = () => closeModal();
@@ -531,11 +676,14 @@
   }
   function lockNote(){
     const rec = ctx.id ? findRec(ctx.type, ctx.id) : null;
-    if (ctx.mode === 'new') return ctx.type === 'servicePAs' ? '' : '<p class="ro-note-line">Enter the order exactly as the provider wrote it. These details lock once the record leaves Draft.</p>';
+    const med = ctx.type === 'medPAs';
+    if (ctx.mode === 'new') return ctx.type === 'servicePAs' ? '' : med
+      ? '<p class="ro-note-line">Medication, diagnosis and codes come from the prescription and the provider’s documentation. Don’t write your own. They lock once the PA leaves Draft.</p>'
+      : '<p class="ro-note-line">Enter the order exactly as the provider wrote it. These details lock once the record leaves Draft.</p>';
     if (!rec || rec.status === 'Draft') return '';
     return isAdmin()
-      ? '<p class="ro-note-line ro-admin-line">You are an administrator, so these provider details are editable. Any correction is written to the activity history.</p>'
-      : '<p class="ro-note-line ro-lock-line">Provider order details are locked. Only an administrator can correct them.</p>';
+      ? `<p class="ro-note-line ro-admin-line">You are an administrator, so these ${med ? 'medication and diagnosis' : 'provider'} details are editable. Any correction is written to the activity history.</p>`
+      : `<p class="ro-note-line ro-lock-line">${med ? 'Medication and diagnosis details' : 'Provider order details'} are locked. Only an administrator can correct them.</p>`;
   }
 
   function detailSections(){
@@ -626,12 +774,13 @@
     if (ctx.mode === 'new') return sec('Notes', grid(fld({name:'newNote', label:'Notes (optional)', kind:'textarea', full:true, rows:2, placeholder:'Saved as the first follow-up note, with your name and the time.'})));
     const rec = findRec(ctx.type, ctx.id) || {notes:[]};
     const list = rec.notes.length ? `<ol class="ro-notes">${rec.notes.map(n => `<li><div class="ro-note-meta"><b>${esc(n.by)}</b><span>${esc(fmtStamp(n.at))}</span></div><p>${esc(n.text)}</p></li>`).join('')}</ol>` : '<p class="ro-muted ro-small">No follow-up notes yet.</p>';
-    const example = ctx.type === 'servicePAs' ? 'e.g. Called UnitedCare about the pending MRI authorization. Still under review; follow-up set for Oct 30.' : 'e.g. Faxed the referral to the specialist office and confirmed they received it.';
+    const example = ctx.type === 'medPAs' ? 'e.g. Contacted UnitedCare to follow up on the pending PA for Lisinopril. Still under review, no documents needed. Follow-up scheduled for Oct 30.'
+      : ctx.type === 'servicePAs' ? 'e.g. Called UnitedCare about the pending MRI authorization. Still under review; follow-up set for Oct 30.' : 'e.g. Faxed the referral to the specialist office and confirmed they received it.';
     return sec('Follow-up notes', `<div class="ro-note-add">${fld({name:'newNote', label:'Add a follow-up note', kind:'textarea', rows:2, placeholder: example, value: d.newNote || ''})}<button type="button" class="secondary" data-ro-action="add-note">Add note</button></div>${list}`);
   }
   function historySection(){
     const rec = findRec(ctx.type, ctx.id) || {history:[]};
-    return sec('Activity history', rec.history.length ? `<ol class="ro-history">${rec.history.map(h => `<li><span class="ro-hist-when">${esc(fmtStamp(h.at))}</span><span>${esc(h.text)}${h.by ? ` <span class="ro-muted">— ${esc(h.by)}</span>` : ''}</span></li>`).join('')}</ol>` : '<p class="ro-muted ro-small">No activity yet.</p>');
+    return sec(ctx.type === 'medPAs' ? 'PA activity history' : 'Activity history', rec.history.length ? `<ol class="ro-history">${rec.history.map(h => `<li><span class="ro-hist-when">${esc(fmtStamp(h.at))}</span><span>${esc(h.text)}${h.by ? ` <span class="ro-muted">— ${esc(h.by)}</span>` : ''}</span></li>`).join('')}</ol>` : '<p class="ro-muted ro-small">No activity yet.</p>');
   }
 
   /* Service PA parts */
@@ -670,21 +819,69 @@
     fld({name:'insurance', label:'Insurance company', kind:'text', list:'roInsurers', required:true, placeholder:'e.g. UnitedCare'}),
     fld({name:'memberId', label:'Insurance member ID', kind:'text', max:40})
   ));
+  function simulateSubmitHtml(){
+    const rec = ctx.id ? findRec(ctx.type, ctx.id) : null;
+    return rec && rec.status === 'Draft' ? `<div class="ro-sim-submit"><button type="button" class="secondary" data-ro-action="simulate-submit">Submit PA (simulated)</button><small class="ro-hint">Sets the status to Pending, records today as the date submitted, and adds a simulated reference (SIM-…) if the PA has none. Nothing is sent to a real insurer.</small></div>` : '';
+  }
+  const paRefHint = 'Leave blank to get a simulated reference (SIM-…) when the PA is submitted. Enter the payer’s number if you have one.';
   function paStatusSection(title){
     return sec(title, grid(
       fld({name:'status', label:'PA status', kind:'select', options: T.servicePAs.statuses, required:true}),
       fld({name:'followUp', label:'Next follow-up date', kind:'date'}),
       fld({name:'assignedTo', label:'Assigned to', kind:'select', options: staffOptions(), required:true}),
       fld({name:'method', label:'Submission method', kind:'select', options: METHODS, required:true}),
-      fld({name:'paRef', label:'PA reference #', kind:'text', code:true, max:40, placeholder:'Assigned on submission if left blank'}),
+      fld({name:'paRef', label:'PA reference #', kind:'text', code:true, max:40, placeholder:'Leave blank for a simulated reference', hint: paRefHint}),
       fld({name:'submitted', label:'Date submitted', kind:'date'})
-    ));
+    ) + simulateSubmitHtml());
   }
+
+  /* Medication PA parts */
+  function rxOptionsFor(d){
+    return [...rxList().filter(r => r && r.patient === d.patient).map(r => [r.medication, `${r.medication} · ${r.prescriber || 'no prescriber'} (${r.status || 'no status'})`]),
+      ['__manual', 'Not in the prescription list']];
+  }
+  function medInfoSection(review){
+    const d = ctx.draft;
+    let rxHtml;
+    if (ctx.clinicalLocked.has('medication') || !d.patient) {
+      const rx = findRx(d);
+      rxHtml = fld({name:'rxDisplay', label:'Prescription record', kind:'display', full:true,
+        value: !d.patient ? 'Select a patient first' : rx ? `Linked: ${rx.medication} · prescribed by ${rx.prescriber || 'unknown'} (${rx.status || 'no status'})` : 'Not linked to a prescription in the list'});
+    } else {
+      rxHtml = fld({name:'rx', label:'Medication from the prescription record', kind:'select', options: rxOptionsFor(d), full:true, required:true, placeholder:'Select a prescription',
+        value: d.rxMode === 'rx' ? d.medication : d.rxMode === 'manual' ? '__manual' : '', hint:'Picking a prescription fills in the medication and the prescribing provider.'});
+    }
+    const parts = [...patientFields(), rxHtml,
+      fld({name:'medication', label:'Medication name and strength', kind:'text', required:true, placeholder:'e.g. Lisinopril 20 mg tablet'}),
+      fld({name:'provider', label:'Prescribing provider', kind:'select', options: providerOptions(), required:true, placeholder:'Select provider'}),
+      fld({name:'diagnosis', label:'Diagnosis', kind:'text', required:true, hint:'From the provider’s documentation.'}),
+      fld({name:'icd11', label:'ICD-11 code', kind:'text', required:true, code:true, placeholder:'ICD-11, for example BA00', max:40}),
+      fld({name:'insurance', label:'Insurance company', kind:'text', list:'roInsurers', required:true, placeholder:'e.g. UnitedCare'}),
+      fld({name:'memberId', label:'Insurance member ID', kind:'text', max:40})];
+    if (review) parts.push(
+      fld({name:'paRef', label:'PA reference #', kind:'text', code:true, max:40, placeholder:'Leave blank for a simulated reference', hint: paRefHint}),
+      fld({name:'submittedDate', label:'Date submitted', kind:'date'}),
+      fld({name:'method', label:'Submission method', kind:'select', options: METHODS_MED, required:true}),
+      fld({name:'assignedTo', label:'Assigned to', kind:'select', options: staffOptions(), required:true, hint:'The staff member handling this PA, not the prescriber.'}));
+    return sec('Patient & medication information', grid(...parts) + lockNote());
+  }
+  const medRequestSection = () => sec('PA request information', grid(
+    fld({name:'paRef', label:'PA reference #', kind:'text', code:true, max:40, placeholder:'Leave blank for a simulated reference', hint: paRefHint}),
+    fld({name:'submittedDate', label:'Date submitted', kind:'date'}),
+    fld({name:'method', label:'Submission method', kind:'select', options: METHODS_MED, required:true}),
+    fld({name:'status', label:'PA status', kind:'select', options: T.medPAs.statuses, required:true}),
+    fld({name:'assignedTo', label:'Assigned to', kind:'select', options: staffOptions(), required:true, hint:'Defaults to you. The prescribing provider is a separate field.'}),
+    fld({name:'followUp', label:'Next follow-up date', kind:'date'})
+  ));
+  const medStatusSection = () => sec('PA status', grid(
+    fld({name:'status', label:'PA status', kind:'select', options: T.medPAs.statuses, required:true}),
+    fld({name:'followUp', label:'Next follow-up date', kind:'date'})
+  ) + simulateSubmitHtml());
   function responseSection(){
     const st = ctx.draft.status;
     let inner;
     if (st === 'Draft') inner = infoBox('Not submitted yet', 'Insurance response fields appear after the PA is submitted. Set the status to Pending once you send it.');
-    else if (st === 'Pending') inner = infoBox('No decision yet', 'Follow up with the insurance on or before the next follow-up date.') + grid(
+    else if (st === 'Pending') inner = infoBox('No decision yet', 'Follow up with the insurance on or before the next follow-up date. There is no expiration date until the PA is approved.') + grid(
       fld({name:'pendingCurrent', label:'Current status from insurance', kind:'text', full:true, placeholder:'e.g. In clinical review'}),
       fld({name:'pendingRemarks', label:'Insurance remarks', kind:'textarea', full:true, rows:2}));
     else if (st === 'Additional Info Needed') inner = grid(
@@ -697,7 +894,9 @@
       fld({name:'approvalDate', label:'Approval date', kind:'date', required:true}),
       fld({name:'effectiveDate', label:'Effective date', kind:'date'}),
       fld({name:'expirationDate', label:'Expiration date', kind:'date'}),
-      fld({name:'approvedService', label:'Approved service / procedure', kind:'text', full:true, max:200, placeholder:'As written in the approval, including units if given'}));
+      ctx.type === 'medPAs'
+        ? fld({name:'approvedQuantity', label:'Approved quantity / duration (if specified)', kind:'text', full:true, max:200, placeholder:'e.g. 30 tablets per 30 days for 12 months'})
+        : fld({name:'approvedService', label:'Approved service / procedure', kind:'text', full:true, max:200, placeholder:'As written in the approval, including units if given'}));
     else if (st === 'Denied') inner = grid(
       fld({name:'denialDate', label:'Denial date', kind:'date', required:true}),
       fld({name:'denialReason', label:'Denial reason', kind:'textarea', required:true, full:true, rows:2}),
@@ -722,13 +921,17 @@
     document.getElementById('roModalEyebrow').textContent = mode === 'new' ? 'NEW RECORD' : `${one.toUpperCase()} · ${rec.number}`;
     document.getElementById('roModalTitle').textContent = mode === 'new' ? `New ${one.toLowerCase()}` : `${one} — review`;
     document.getElementById('roModalSub').textContent = mode === 'new'
-      ? (type === 'servicePAs' ? 'Create the authorization request. Status starts as Draft until you submit it.' : 'Create the record from the provider’s instructions.')
+      ? (isPA(type) ? 'Create the authorization request. It stays a Draft until you submit it.' : 'Create the record from the provider’s instructions.')
       : `${draft.patient} · created by ${rec.createdBy || 'unknown'} on ${fmtDate((rec.createdAt || '').slice(0, 10)) || 'unknown date'}`;
     document.getElementById('roSubmit').textContent = mode === 'new' ? T[type].create : 'Save changes';
     box.classList.toggle('ro-wide', mode === 'review');
 
     let main, side;
-    if (type === 'servicePAs') {
+    if (type === 'medPAs') {
+      if (mode === 'new') { main = [medInfoSection(false), medRequestSection(), responseSection(), notesSection()]; side = []; }
+      else { const info = medInfoSection(true), status = medStatusSection(), response = responseSection(), notes = notesSection(), history = historySection();
+        main = [info, notes, history]; side = [status, response]; }
+    } else if (type === 'servicePAs') {
       main = [paServiceSection(), paInsuranceSection()];
       side = mode === 'new' ? [paStatusSection('PA request details'), responseSection(), notesSection()] : [paStatusSection('PA status & submission'), responseSection(), notesSection(), historySection()];
     } else {
@@ -747,7 +950,7 @@
     const form = document.getElementById('roForm'), fd = new FormData(form), d = ctx.draft;
     ctx.defs.forEach(def => {
       if (def.kind === 'display' || ctx.locked.has(def.name)) return;
-      if (def.name === 'link' || def.name === 'linkPa') return;
+      if (def.name === 'link' || def.name === 'linkPa' || def.name === 'rx') return;
       const raw = fd.get(def.name);
       if (def.kind === 'radio') { if (raw !== null) d[def.name] = def.name === 'authRequired' ? raw === 'yes' : raw; return; }
       let v = String(raw ?? '').trim();
@@ -764,7 +967,7 @@
     if (!ctx) return;
     const name = e.target.name;
     if (name === 'test' || name === 'procedure') return autoCategory(e.target);
-    if (!['patient','authRequired','link'].includes(name) && !(name === 'status' && ctx.type === 'servicePAs')) return;
+    if (!['patient','authRequired','link','rx'].includes(name) && !(name === 'status' && isPA(ctx.type))) return;
     const before = {insurance: ctx.draft.insurance, memberId: ctx.draft.memberId, patientId: ctx.draft.patientId};
     collectDraft();
     const d = ctx.draft;
@@ -772,13 +975,20 @@
       const ins = patientInsurance(findPatient(d.patientId));
       if (ins.insurance && (!before.insurance || before.insurance === ctx.autoInsurance)) { d.insurance = ins.insurance; d.memberId = ins.memberId || ''; ctx.autoInsurance = ins.insurance; }
       if (ctx.type === 'servicePAs') d.link = null;
+      if (ctx.type === 'medPAs') { d.rxMode = ''; d.medication = ''; d.provider = ''; }
+    }
+    if (name === 'rx') {
+      const v = e.target.value;
+      if (v === '__manual') { if (d.rxMode === 'rx') { d.medication = ''; d.provider = ''; } d.rxMode = 'manual'; }
+      else if (v) { const rx = findRx({patient: d.patient, medication: v}); d.rxMode = 'rx'; d.medication = v; if (rx && rx.prescriber) d.provider = rx.prescriber; }
+      else d.rxMode = '';
     }
     if (name === 'link') {
       const val = e.target.value;
       if (val) { const [t, id] = val.split(':'); const src = findRec(t, id); if (src) applySource(d, t, src); }
       else d.link = null;
     }
-    if (name === 'status' && ctx.type === 'servicePAs' && SUBMITTED.has(d.status) && !d.submitted) d.submitted = todayIso();
+    if (name === 'status' && isPA(ctx.type) && SUBMITTED.has(d.status) && !d[subKey(ctx.type)]) d[subKey(ctx.type)] = todayIso();
     renderModal(true);
   });
   function autoCategory(input){
@@ -801,7 +1011,7 @@
       const f = t === 'diagnostic' ? 'scheduledDate' : 'procedureDate';
       if (!d[f]) flag(f, 'Add the scheduled date, or choose a different status.');
     }
-    if (t === 'servicePAs') {
+    if (isPA(t)) {
       if (d.status === 'Approved' && d.effectiveDate && d.expirationDate && d.expirationDate < d.effectiveDate) flag('expirationDate', 'The expiration date must be on or after the effective date.');
       if (!d.patientId && !d.patient) flag('patient', 'Select the patient.');
     }
@@ -810,26 +1020,28 @@
 
   /* ---------- saving ---------- */
   const pick = (obj, keys) => keys.reduce((o, k) => { if (obj[k] !== undefined) o[k] = obj[k]; return o; }, {});
-  function linkHistoryName(t, r){ return `${T[t].one} ${t === 'servicePAs' ? (r.paRef || r.number) : r.number}`; }
+  function linkHistoryName(t, r){ return `${T[t].one} ${isPA(t) ? (r.paRef || r.number) : r.number}`; }
+  const submittedText = r => `PA submitted via ${r.method || 'unknown method'} (simulated). Reference # ${r.paRef}`;
 
   function diffHistory(type, before, after, out){
     const changed = f => !same(before[f], after[f]);
     if (changed('status')) {
-      if (type === 'servicePAs') {
-        if (before.status === 'Draft' && SUBMITTED.has(after.status)) out.push(`PA submitted via ${after.method}. Reference # ${after.paRef}`);
+      if (isPA(type)) {
+        if (before.status === 'Draft' && SUBMITTED.has(after.status)) out.push(submittedText(after));
         responseHistory(after, out);
       }
       out.push(`Status changed from ${before.status} to ${after.status}`);
-    } else if (type === 'servicePAs' && ['pendingCurrent','pendingRemarks','infoReceived','infoRequested','infoDeadline','infoAction','authNumber','approvalDate','effectiveDate','expirationDate','approvedService','denialDate','denialReason','appealInstructions'].some(changed)) {
+    } else if (isPA(type) && RESPONSE_FIELDS.some(changed)) {
       out.push('Insurance response details updated');
     }
     if (changed('assignedTo')) out.push(`Assigned to ${after.assignedTo}`);
-    if (type === 'servicePAs' && changed('followUp') && after.followUp) out.push(`Next follow-up set for ${fmtDate(after.followUp)}`);
-    if (type === 'servicePAs' && changed('paRef') && after.paRef && !(before.status === 'Draft' && SUBMITTED.has(after.status))) out.push(`PA reference # recorded: ${after.paRef}`);
+    if (isPA(type) && changed('followUp') && after.followUp) out.push(`Next follow-up set for ${fmtDate(after.followUp)}`);
+    if (isPA(type) && changed('paRef') && after.paRef && !(before.status === 'Draft' && SUBMITTED.has(after.status))) out.push(`PA reference # recorded: ${after.paRef}`);
+    if (isPA(type) && changed('memberId')) out.push(`Member ID updated to ${after.memberId || 'none'}`);
     ['scheduledDate','procedureDate'].forEach(f => { if (changed(f)) out.push(after[f] ? `Scheduled for ${fmtDate(after[f])}` : 'Scheduled date cleared'); });
-    if (type !== 'servicePAs' && changed('authRequired')) out.push(`Prior authorization marked as ${after.authRequired ? 'required' : 'not required'}`);
+    if (ORDER_TYPES.includes(type) && changed('authRequired')) out.push(`Prior authorization marked as ${after.authRequired ? 'required' : 'not required'}`);
     if (changed('referredTo')) out.push(`Referred to changed to ${after.referredTo}`);
-    if (type !== 'servicePAs' && changed('facility')) out.push(`Facility changed to ${after.facility}`);
+    if (ORDER_TYPES.includes(type) && changed('facility')) out.push(`Facility changed to ${after.facility}`);
     if (changed('insurance')) out.push(`Insurance updated to ${after.insurance || 'none'}`);
     const corrected = T[type].clinical.filter(f => f !== 'patient' ? changed(f) : changed('patientId'));
     if (corrected.length && before.status !== 'Draft' && isAdmin() && !(ctx && ctx.linkNew)) out.push(`Provider details corrected by administrator: ${corrected.map(f => LABELS[f] || f).join(', ')}`);
@@ -850,30 +1062,32 @@
     const fields = T[type].fields;
     if (ctx.mode === 'new') {
       rec = {...pick(d, fields), id: uid(T[type].prefix), number: nextNumber(type), createdAt: at, createdBy: by, notes: [], history: []};
-      if (type === 'servicePAs' && SUBMITTED.has(rec.status)) {
+      if (isPA(type) && SUBMITTED.has(rec.status)) {
         if (!rec.paRef) rec.paRef = nextPaRef();
-        if (!rec.submitted) rec.submitted = todayIso();
+        if (!rec[subKey(type)]) rec[subKey(type)] = todayIso();
       }
       hist.push(`${T[type].one} created${rec.status === 'Draft' ? ' as Draft' : ` (status: ${rec.status})`}`);
-      if (type === 'servicePAs' && SUBMITTED.has(rec.status)) { hist.push(`PA submitted via ${rec.method}. Reference # ${rec.paRef}`); responseHistory(rec, hist); }
-      store[type].unshift(rec);
+      if (isPA(type) && SUBMITTED.has(rec.status)) { hist.push(submittedText(rec)); responseHistory(rec, hist); }
+      list(type).unshift(rec);
     } else {
       rec = findRec(type, ctx.id);
       if (!rec) { toast('This record was removed by someone else, so your changes could not be saved.'); closeModal(true); return null; }
       const before = JSON.parse(JSON.stringify(rec));
       // Only write fields this person changed, so edits made elsewhere since the form opened are kept.
       const linkNew = type === 'servicePAs' && Boolean(d.link) && !ctx.original.link;
-      const isLocked = f => { const key = f === 'patientId' ? 'patient' : f; return ctx.locked.has(key) && !(linkNew && (ctx.linkLocked.has(key) || ['insurance','memberId','link'].includes(f))); };
+      // Skip only fields locked as provider details; values filled from a link or a prescription are written.
+      const isLocked = f => { const key = f === 'patientId' ? 'patient' : f; return ctx.clinicalLocked.has(key) && !(linkNew && (ctx.linkLocked.has(key) || ['insurance','memberId','link'].includes(f))); };
       fields.forEach(f => { if (!isLocked(f) && !same(d[f], ctx.original[f])) rec[f] = d[f]; });
       ctx.linkNew = linkNew;
-      if (type === 'servicePAs' && before.status === 'Draft' && SUBMITTED.has(rec.status)) {
+      if (isPA(type) && before.status === 'Draft' && SUBMITTED.has(rec.status)) {
         if (!rec.paRef) rec.paRef = nextPaRef();
-        if (!rec.submitted) rec.submitted = todayIso();
+        if (!rec[subKey(type)]) rec[subKey(type)] = todayIso();
       }
       diffHistory(type, before, rec, hist);
     }
     if (d.newNote) { rec.notes.unshift({at, by, text: d.newNote}); hist.push('Follow-up note added'); }
     rec.updatedAt = at;
+    if (type === 'medPAs') syncLegacyMed(rec);
     // links between PAs and referrals / orders (both sides keep their own status)
     if (type === 'servicePAs' && rec.link && (ctx.mode === 'new' || !ctx.original.link)) {
       const src = findRec(rec.link.type, rec.link.id);
@@ -883,7 +1097,7 @@
         hist.unshift(`Linked to ${linkHistoryName(rec.link.type, src)}`);
       }
     }
-    if (type !== 'servicePAs' && d.linkPa) {
+    if (ORDER_TYPES.includes(type) && d.linkPa) {
       const pa = findRec('servicePAs', d.linkPa);
       if (pa && !pa.link) {
         pa.link = {type, id: rec.id}; pa.updatedAt = at; rec.paId = pa.id; rec.authRequired = true;
@@ -899,15 +1113,16 @@
   document.getElementById('roForm').addEventListener('submit', e => {
     e.preventDefault();
     if (!ctx) return;
-    const wasNew = ctx.mode === 'new', type = ctx.type, fromSource = ctx.fromSource;
+    const wasNew = ctx.mode === 'new', type = ctx.type, fromSource = ctx.fromSource, wasDraft = ctx.original && ctx.original.status === 'Draft';
     const rec = save(); if (!rec) return;
-    const label = wasNew ? `${T[type].one} ${type === 'servicePAs' && rec.paRef ? rec.paRef : rec.number} created` : 'Changes saved';
+    const label = wasNew ? `${T[type].one} ${isPA(type) && rec.paRef ? rec.paRef : rec.number} created`
+      : isPA(type) && wasDraft && SUBMITTED.has(rec.status) ? `PA submitted (simulated). Reference # ${rec.paRef}` : 'Changes saved';
     if (wasNew && type === 'servicePAs' && rec.link) {
       savedToast(`${label} and linked to ${findRec(rec.link.type, rec.link.id)?.number || 'the order'}`);
       if (fromSource) { const op = ctx.opener; ctx = null; openForm(rec.link.type, rec.link.id, {opener: op}); return; }
     } else savedToast(label);
-    if (wasNew && type !== 'servicePAs' && rec.authRequired) { const op = ctx.opener; ctx = null; openForm(type, rec.id, {opener: op}); return; }
-    if (state.tab !== type) state.tab = type;
+    if (wasNew && ORDER_TYPES.includes(type) && rec.authRequired) { const op = ctx.opener; ctx = null; openForm(type, rec.id, {opener: op}); return; }
+    if (ORDER.includes(type) && state.tab !== type) state.tab = type;
     closeModal(true);
     if (isVisible()) renderAll();
   });
@@ -916,6 +1131,13 @@
   document.getElementById('roFormBody').addEventListener('click', e => {
     const btn = e.target.closest('button'); if (!btn || !ctx) return;
     if (btn.dataset.roAction === 'add-note') return addNote();
+    if (btn.dataset.roAction === 'simulate-submit') {
+      const form = document.getElementById('roForm');
+      const sel = form.querySelector('[name="status"]'); if (sel) sel.value = 'Pending';
+      const sub = form.querySelector(`[name="${subKey(ctx.type)}"]`); if (sub && !sub.value) sub.value = todayIso();
+      form.requestSubmit();
+      return;
+    }
     if (btn.dataset.roAction === 'create-pa') {
       const src = {type: ctx.type, id: ctx.id};
       if (serializeForm() !== ctx.baseline) { if (!save()) return; persist(); }
@@ -938,6 +1160,7 @@
     rec.notes.unshift({at, by, text: ctx.draft.newNote});
     rec.history.unshift({at, by, text: 'Follow-up note added'});
     rec.updatedAt = at;
+    if (ctx.type === 'medPAs') syncLegacyMed(rec);
     ctx.draft.newNote = '';
     savedToast('Follow-up note added');
     renderModal(true);
