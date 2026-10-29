@@ -117,13 +117,83 @@
     });
   }
 
-  /* "Change Pharmacy" now lists the directory instead of four fixed names. */
+  /* "Change Pharmacy" lists the directory instead of four fixed names, and can also move the
+     patient's active prescriptions. Each prescription keeps its own pharmacy; completed ones
+     keep the pharmacy they were filled at. */
+  const activeRxFor = name => prescriptions.filter(rx => rx && rx.patient === name && rx.status !== 'Completed');
   const baseChangePharmacy = openChangePharmacy;
   openChangePharmacy = function(){
     baseChangePharmacy();
-    const select = $('#modalFields select[name="pharmacy"]');
-    if (select) select.innerHTML = pharmacyOptions(selectedErxPatient().preferredPharmacy || 'CarePlus Pharmacy');
+    const p = selectedErxPatient(), select = $('#modalFields select[name="pharmacy"]');
+    if (!select) return;
+    select.innerHTML = pharmacyOptions(p.preferredPharmacy || 'CarePlus Pharmacy');
+    const n = activeRxFor(p.n).length;
+    if (n) (select.closest('label') || select).insertAdjacentHTML('afterend',
+      `<label class="rx-move-active" style="display:flex;align-items:flex-start;gap:9px;font-weight:600;margin:4px 0 6px"><input type="checkbox" name="moveActiveRx" value="yes" checked style="width:16px;height:16px;margin:2px 0 0;flex:0 0 16px">
+        <span>Also send ${esc(p.n)}'s ${n} active prescription${n === 1 ? '' : 's'} to this pharmacy</span></label>
+       <p class="form-note" style="margin:0 0 14px;font-size:12px">Completed prescriptions keep the pharmacy they were filled at.</p>`);
   };
+
+  /* Prescription form: a Pharmacy field. Editing keeps the prescription's own pharmacy;
+     a new prescription starts with its patient's preferred pharmacy. */
+  if (typeof rxForm === 'function') {
+    const baseRxForm = rxForm;
+    rxForm = function(rx = {}){
+      const html = baseRxForm(rx);
+      const who = rx.patient || activeErxPatient;
+      const patient = (typeof patients !== 'undefined' ? patients : []).find(p => p.n === who) || {};
+      const current = rx.pharmacy || patient.preferredPharmacy || 'CarePlus Pharmacy';
+      const field = `<label style="margin-bottom:14px">Pharmacy<select name="rxPharmacy" data-auto="${rx.pharmacy ? '' : '1'}">${pharmacyOptions(current)}</select></label>`;
+      const at = html.lastIndexOf('</div>');
+      return at < 0 ? html + field : html.slice(0, at) + field + html.slice(at);
+    };
+  }
+  $('#modalFields').addEventListener('change', e => {
+    if (e.target.name === 'rxPharmacy') { e.target.dataset.auto = ''; return; }
+    if (e.target.name !== 'patient' || $('#modal').dataset.type !== 'erx-new') return;
+    const sel = $('#modalFields select[name="rxPharmacy"]');
+    if (!sel || sel.dataset.auto !== '1') return;   // keep a pharmacy the user picked
+    const p = patients.find(x => x.n === e.target.value) || {};
+    sel.innerHTML = pharmacyOptions(p.preferredPharmacy || 'CarePlus Pharmacy');
+  });
+
+  /* Prescription details: flag a prescription that still goes to an old pharmacy. */
+  if (typeof openPrescriptionDetails === 'function') {
+    const baseRxDetails = openPrescriptionDetails;
+    openPrescriptionDetails = function(rx){
+      baseRxDetails(rx);
+      const p = rx && patients.find(x => x.n === rx.patient), preferred = p && p.preferredPharmacy;
+      if (!preferred || !rx.pharmacy || preferred === rx.pharmacy || rx.status === 'Completed') return;
+      const grid = $('#modalFields .detail-grid');
+      if (grid) grid.insertAdjacentHTML('afterend', `<p class="export-note rx-pharmacy-mismatch" style="margin-top:12px">${esc(rx.patient)}'s preferred pharmacy is now <b>${esc(preferred)}</b>, but this prescription still goes to <b>${esc(rx.pharmacy)}</b>. Click Edit Prescription to change it.</p>`);
+    };
+  }
+
+  /* app.js handles these forms with a capture listener on the form that stops the event, so this
+     listens on the document (capture) to run first. It never stops the event. */
+  document.addEventListener('submit', e => {
+    if (!e.target || e.target.id !== 'modalForm') return;
+    const type = $('#modal').dataset.type;
+    if (type === 'erx-pharmacy') {
+      const d = new FormData(e.target), chosen = String(d.get('pharmacy') || ''), p = selectedErxPatient();
+      if (!chosen || d.get('moveActiveRx') !== 'yes') return;
+      const moved = activeRxFor(p.n).filter(rx => rx.pharmacy !== chosen);
+      moved.forEach(rx => { rx.pharmacy = chosen; });   // app.js then saves the preferred pharmacy, re-renders and saves
+      if (moved.length) setTimeout(() => toast(`Preferred pharmacy updated. ${moved.length} active prescription${moved.length === 1 ? '' : 's'} moved to ${chosen}.`), 0);
+      return;
+    }
+    if (type !== 'erx-new' && type !== 'erx-edit') return;
+    const chosen = String(new FormData(e.target).get('rxPharmacy') || '');
+    if (!chosen) return;
+    const index = Number($('#modal').dataset.rxIndex), first = prescriptions[0];
+    // app.js sets the pharmacy from the eRx header patient; put back the one chosen in the form.
+    setTimeout(() => {
+      const rx = type === 'erx-edit' ? prescriptions[index] : (prescriptions[0] !== first ? prescriptions[0] : null);
+      if (!rx || rx.pharmacy === chosen) return;
+      rx.pharmacy = chosen;
+      renderPrescriptions(activeErxTab);   // re-renders and queues the shared save
+    }, 0);
+  }, true);
 
   /* ---------- admin: add a pharmacy ---------- */
   function openAddPharmacy(){
