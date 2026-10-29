@@ -134,16 +134,28 @@
        <p class="form-note" style="margin:0 0 14px;font-size:12px">Completed prescriptions keep the pharmacy they were filled at.</p>`);
   };
 
-  /* Prescription form: a Pharmacy field. Editing keeps the prescription's own pharmacy;
-     a new prescription starts with its patient's preferred pharmacy. */
+  /* Prescription form: Prescriber and Pharmacy fields.
+     - New prescription: choose the prescriber; the pharmacy starts as the patient's preferred one.
+     - Edit: the prescriber is who wrote the prescription, so it is read-only for students
+       (administrators can correct it); the pharmacy can be changed. */
+  const DEFAULT_PRESCRIBER = 'Dr. Alex Morgan';
+  const prescriberOptions = current => options(
+    [...new Set([DEFAULT_PRESCRIBER, 'Dr. Sync', 'Dr. Kim Santos', ...prescriptions.map(rx => rx && rx.prescriber).filter(Boolean)])], current);
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const writtenToday = () => { const d = new Date(); return `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`; };
   if (typeof rxForm === 'function') {
     const baseRxForm = rxForm;
     rxForm = function(rx = {}){
       const html = baseRxForm(rx);
+      const editing = Boolean(rx.medication);
       const who = rx.patient || activeErxPatient;
       const patient = (typeof patients !== 'undefined' ? patients : []).find(p => p.n === who) || {};
       const current = rx.pharmacy || patient.preferredPharmacy || 'CarePlus Pharmacy';
-      const field = `<label style="margin-bottom:14px">Pharmacy<select name="rxPharmacy" data-auto="${rx.pharmacy ? '' : '1'}">${pharmacyOptions(current)}</select></label>`;
+      const prescriber = rx.prescriber || DEFAULT_PRESCRIBER;
+      const prescriberField = !editing || isAdmin()
+        ? `<label style="margin-bottom:14px">Prescriber<select name="rxPrescriber">${prescriberOptions(prescriber)}</select>${editing ? '<small class="form-note" style="display:block;margin-top:4px;font-size:11px">Administrators only: corrects who wrote this prescription.</small>' : ''}</label>`
+        : `<label style="margin-bottom:14px">Prescriber<input value="${esc(prescriber)}" readonly style="background:rgba(15,42,46,.045);border-style:dashed"><small class="form-note" style="display:block;margin-top:4px;font-size:11px">Set when the prescription was written${rx.date ? ` (${esc(rx.date)})` : ''}.</small></label>`;
+      const field = `${prescriberField}<label style="margin-bottom:14px">Pharmacy<select name="rxPharmacy" data-auto="${rx.pharmacy ? '' : '1'}">${pharmacyOptions(current)}</select></label>`;
       const at = html.lastIndexOf('</div>');
       return at < 0 ? html + field : html.slice(0, at) + field + html.slice(at);
     };
@@ -162,6 +174,9 @@
     const baseRxDetails = openPrescriptionDetails;
     openPrescriptionDetails = function(rx){
       baseRxDetails(rx);
+      const grid0 = $('#modalFields .detail-grid');
+      if (grid0 && rx && ![...grid0.querySelectorAll('small')].some(x => x.textContent === 'Prescriber'))
+        grid0.insertAdjacentHTML('beforeend', `<div><small>Prescriber</small><b>${esc(rx.prescriber || 'Not recorded')}</b></div><div><small>Date written</small><b>${esc(rx.date || 'Not recorded')}</b></div>`);
       const p = rx && patients.find(x => x.n === rx.patient), preferred = p && p.preferredPharmacy;
       if (!preferred || !rx.pharmacy || preferred === rx.pharmacy || rx.status === 'Completed') return;
       const grid = $('#modalFields .detail-grid');
@@ -183,15 +198,26 @@
       return;
     }
     if (type !== 'erx-new' && type !== 'erx-edit') return;
-    const chosen = String(new FormData(e.target).get('rxPharmacy') || '');
-    if (!chosen) return;
+    const d = new FormData(e.target);
+    const chosenPharmacy = String(d.get('rxPharmacy') || '');
+    const chosenPrescriber = String(d.get('rxPrescriber') || '');
     const index = Number($('#modal').dataset.rxIndex), first = prescriptions[0];
-    // app.js sets the pharmacy from the eRx header patient; put back the one chosen in the form.
+    const original = type === 'erx-edit' && prescriptions[index] ? {prescriber: prescriptions[index].prescriber, date: prescriptions[index].date} : null;
+    // app.js overwrites the pharmacy (from the eRx header patient), the prescriber ("Dr. Alex Morgan")
+    // and the date ("Today") on every save. Put the right values back once it has saved.
     setTimeout(() => {
       const rx = type === 'erx-edit' ? prescriptions[index] : (prescriptions[0] !== first ? prescriptions[0] : null);
-      if (!rx || rx.pharmacy === chosen) return;
-      rx.pharmacy = chosen;
-      renderPrescriptions(activeErxTab);   // re-renders and queues the shared save
+      if (!rx) return;
+      const before = JSON.stringify([rx.pharmacy, rx.prescriber, rx.date]);
+      if (chosenPharmacy) rx.pharmacy = chosenPharmacy;
+      if (type === 'erx-edit') {
+        rx.prescriber = (chosenPrescriber && isAdmin()) ? chosenPrescriber : (original && original.prescriber) || rx.prescriber;
+        rx.date = (original && original.date) || rx.date;
+      } else {
+        rx.prescriber = chosenPrescriber || DEFAULT_PRESCRIBER;
+        rx.date = writtenToday();
+      }
+      if (JSON.stringify([rx.pharmacy, rx.prescriber, rx.date]) !== before) renderPrescriptions(activeErxTab);   // re-renders and queues the shared save
     }, 0);
   }, true);
 
