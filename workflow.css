@@ -1,0 +1,147 @@
+/* Sync2EHR — connected workflow (November 2026). Loaded after glass-v2.css and referrals.css. */
+
+/* save status next to the search button */
+.save-status{align-self:center;font-family:inherit;font-size:11.5px;font-weight:600;line-height:1;padding:7px 11px;border-radius:999px;white-space:nowrap;border:1px solid var(--g-hair,rgba(15,42,46,.09));background:rgba(255,255,255,.55);color:var(--g-muted,#4b6268)}
+.save-status.ok{color:var(--g-sea-deep,#086358);background:rgba(11,127,115,.08);border-color:rgba(11,127,115,.18)}
+.save-status.ok::before{content:"\2713  "}
+.save-status.busy{color:#2c5089;background:rgba(83,127,192,.10);border-color:rgba(83,127,192,.22)}
+.save-status.warn{color:#a3402f;background:rgba(239,130,107,.12);border-color:rgba(207,90,72,.26)}
+.top-actions{gap:10px}
+.top-actions .icon-btn:not(.notification){--g-icon:var(--i-search)}
+
+/* session expired: sign-in appears over the app so unsaved work stays put */
+.auth-shell.auth-resume{position:fixed;inset:0;z-index:300}
+.auth-resume-note{margin:-4px 0 14px;padding:10px 12px;border-radius:10px;background:rgba(230,163,59,.14);border:1px solid rgba(195,132,27,.28);color:#7a5210;font-size:13px;line-height:1.45}
+
+/* clickable stat cards */
+.wf-clickable{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
+.wf-clickable:hover{transform:translateY(-1px)}
+.wf-clickable:focus-visible,.wf-task:focus-visible,.wf-result:focus-visible{outline:2px solid var(--g-sea,#097468);outline-offset:2px}
+
+/* dashboard schedule rows are buttons now */
+button.appt.wf-appt{width:100%;background:none;border:0;border-radius:10px;font:inherit;text-align:left;cursor:pointer;padding:4px 6px;color:inherit}
+button.appt.wf-appt:hover{background:var(--g-hover,rgba(11,127,115,.07))}
+.appt-tag.appointment-status{border:1px solid transparent}
+.wf-all-clear .dot{background:var(--g-sea,#097468)}
+.wf-empty{padding:18px 4px;color:var(--g-muted,#4b6268)}
+.wf-empty b{display:block;color:var(--g-ink,#0f2a2e);margin-bottom:4px}
+.wf-empty p{margin:0;font-size:13px}
+.wf-empty.compact{padding:8px 4px 4px}
+
+/* filter chips */
+.wf-filter-bar{display:flex;flex-wrap:wrap;gap:8px;padding:0 22px 14px}
+.wf-filter-bar button{border:1px solid var(--g-hair,rgba(15,42,46,.09));background:rgba(255,255,255,.6);color:var(--g-ink-2,#33494f);border-radius:999px;padding:7px 12px;font-family:inherit;font-size:12px;font-weight:600;line-height:1;cursor:pointer}
+.wf-filter-bar button span{display:inline-block;min-width:18px;margin-left:4px;padding:2px 6px;border-radius:999px;background:rgba(15,42,46,.07);font-size:11px}
+.wf-filter-bar button.active{background:var(--g-sea-deep,#086358);color:#fff;border-color:transparent}
+.wf-filter-bar button.active span{background:rgba(255,255,255,.22)}
+.wf-filter-bar button.attention:not(.active){border-color:rgba(207,90,72,.4);color:#a3402f}
+.appointment-row{grid-template-columns:170px minmax(0,1.5fr) minmax(0,1fr) 120px 80px}
+.appointment-row>span:last-child{margin-top:0}
+.appointment-status.cancelled{background:rgba(15,42,46,.06);color:#6b7c80;text-decoration:line-through}
+
+/* calendar */
+.wf-calendar-body{background:repeating-linear-gradient(to bottom,transparent 0,transparent 55px,rgba(15,42,46,.08) 55px,rgba(15,42,46,.08) 56px)!important}
+.wf-calendar-body .time-slot{padding-top:4px;box-sizing:border-box}
+.wf-calendar-body .cal-col{cursor:copy}
+.cal-event{cursor:pointer}
+.cal-event time{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-event.status-completed{opacity:.62}
+.cal-event.status-checked-in{box-shadow:inset 3px 0 0 #537fc0}
+.cal-event.status-cancelled,.cal-event.status-no-show,.month-event.status-cancelled,.month-event.status-no-show{opacity:.5;text-decoration:line-through}
+.month-day{cursor:copy}
+.month-day.is-today>b{background:var(--g-sea-deep,#086358);color:#fff;border-radius:999px;padding:1px 7px}
+#calendarViewport .weekdays{padding-left:0}
+.weekdays span:first-child:empty{border-left:0}
+
+/* connected action buttons */
+.wf-actions{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px}
+.wf-actions .secondary{padding:8px 12px;font-size:12.5px;border-radius:10px}
+.wf-status-help{margin-top:0}
+.wf-link-note{background:rgba(11,127,115,.07);border:1px solid rgba(11,127,115,.16);border-radius:10px;padding:9px 12px}
+.chart-summary{margin:4px 0 16px;padding:14px;border-radius:14px;background:rgba(255,255,255,.55);border:1px solid var(--g-hair,rgba(15,42,46,.09))}
+.chart-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin-bottom:12px}
+.chart-grid small{display:block;font-size:11px;color:var(--g-faint,#566d73);text-transform:uppercase;letter-spacing:.04em}
+.chart-grid b{display:block;font-size:13.5px;color:var(--g-ink,#0f2a2e);margin-top:3px}
+.chart-summary .wf-actions{margin:0}
+.field-hint{display:block;margin-top:6px;font-weight:400;font-size:11.5px;color:var(--g-faint,#566d73)}
+
+/* task panel, search, help */
+.wf-task-list,.wf-search-results{display:grid;gap:8px;margin-top:8px}
+.wf-task,.wf-result{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--g-hair,rgba(15,42,46,.09));background:rgba(255,255,255,.6);font:inherit;text-align:left;cursor:pointer;color:var(--g-ink-2,#33494f)}
+.wf-result{grid-template-columns:34px minmax(0,1fr) auto}
+.wf-task:hover,.wf-result:hover{background:var(--g-hover,rgba(11,127,115,.07))}
+.wf-task b,.wf-result b{display:block;color:var(--g-ink,#0f2a2e)}
+.wf-task small,.wf-result small{display:block;color:var(--g-muted,#4b6268);margin-top:2px}
+.wf-task em{font-style:normal;font-weight:800;color:var(--g-ink,#0f2a2e)}
+.wf-go{color:var(--g-sea-deep,#086358);font-weight:700;font-size:12px;white-space:nowrap}
+.wf-result .avatar{width:34px;height:34px;font-size:11px}
+.wf-help h4{margin:16px 0 6px}
+.wf-help ol,.wf-help ul{margin:0;padding-left:20px;display:grid;gap:6px;font-size:13.5px;line-height:1.5;color:var(--g-ink-2,#33494f)}
+
+/* patients */
+.visit-cell{display:flex;flex-direction:column;gap:3px}
+.visit-cell .muted{color:var(--g-faint,#566d73)}
+.recent-patient-row{cursor:pointer}
+.recent-patient-row:hover{background:var(--g-hover,rgba(11,127,115,.07))}
+.wf-select-label{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;white-space:nowrap}
+.wf-select-label select{border:1px solid var(--g-hair,rgba(15,42,46,.09));border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.7);font:inherit;font-weight:500;color:var(--g-ink-2,#33494f)}
+label.filter.wf-select-label{cursor:default}
+.invoice-card .card-head .wf-select-label{margin-left:auto}
+
+/* prescriptions: whose list is showing */
+.erx-scope-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.erx-scope-head h3{margin:0}
+.erx-table>.erx-scope-head{padding:18px 20px 12px}
+.erx-scope-toggle{display:inline-flex;border:1px solid var(--g-hair,rgba(15,42,46,.09));border-radius:999px;padding:3px;background:rgba(255,255,255,.6)}
+.erx-scope-toggle button{border:0;background:none;border-radius:999px;padding:6px 12px;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--g-ink-2,#33494f);cursor:pointer}
+.erx-scope-toggle button.active{background:var(--g-sea-deep,#086358);color:#fff}
+.erx-rx-patient{display:block;font-weight:500;font-size:11px;color:var(--g-faint,#566d73);margin-top:2px}
+.erx-empty{padding:18px 20px}
+
+/* reports */
+.report-filters{grid-template-columns:repeat(5,minmax(0,1fr)) auto}
+.wf-report-detail{margin:-4px 0 10px;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.55);border:1px solid var(--g-hair,rgba(15,42,46,.09))}
+.wf-report-detail ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:12.5px}
+.wf-report-detail li{display:flex;flex-wrap:wrap;gap:4px 10px}
+.wf-report-detail li span{color:var(--g-muted,#4b6268)}
+
+@media (max-width:900px){
+  .appointment-row{grid-template-columns:1fr auto}
+  .appointment-row>span:nth-child(3),.appointment-row>span:last-child{display:none}
+  .appointment-row>.appt-date{grid-column:1 / -1}
+  .chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .report-filters{grid-template-columns:1fr 1fr}
+  .save-status{display:none}
+}
+@media (max-width:620px){
+  .wf-filter-bar{padding:0 14px 12px}
+  .report-filters{grid-template-columns:1fr}
+  .wf-task{grid-template-columns:12px minmax(0,1fr) auto}
+  .wf-task .wf-go{display:none}
+}
+
+/* fixes after visual review */
+.erx-scope-head h3{border:0!important;padding:0!important;margin:0!important}
+.erx-table>.erx-scope-head{border-bottom:1px solid var(--g-hair,rgba(15,42,46,.09))}
+.auth-shell.auth-resume .auth-panel{background:rgba(238,246,244,.94);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.auth-shell.auth-resume .switcher{display:none}
+.wf-calendar-body .cal-event{font-size:11px;line-height:1.25;padding:5px 8px}
+.wf-calendar-body .cal-event time{font-size:9.5px;margin-bottom:1px}
+.wf-calendar-body .cal-event b{font-size:11.5px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-calendar-body .cal-event .cal-type{display:block;font-size:10.5px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:620px){
+  .calendar>*{min-width:0}
+  .calendar>#calendarViewport.wf-wide{min-width:680px}
+  .calendar-head{flex-wrap:wrap;row-gap:10px}
+  .calendar-head .view-toggle{margin-left:auto}
+}
+
+/* covers the app until the shared clinic has loaded (nothing typed into sample data gets lost) */
+.cloud-loading{position:fixed;inset:0;z-index:250;display:grid;place-items:center;background:rgba(232,242,240,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.cloud-loading[hidden]{display:none}
+.cloud-loading-box{display:grid;justify-items:center;gap:8px;max-width:360px;padding:26px 28px;border-radius:18px;background:rgba(255,255,255,.9);box-shadow:0 20px 44px -18px rgba(13,59,57,.38);text-align:center}
+.cloud-loading-box b{font-size:16px;color:var(--g-ink,#0f2a2e)}
+.cloud-loading-box p{margin:0;font-size:13px;color:var(--g-muted,#4b6268)}
+.cloud-spinner{width:28px;height:28px;border-radius:50%;border:3px solid rgba(11,127,115,.18);border-top-color:var(--g-sea,#097468);animation:cloudspin .9s linear infinite}
+@keyframes cloudspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.cloud-spinner{animation:none}}
